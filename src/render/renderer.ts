@@ -15,10 +15,13 @@ const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -appl
  */
 const LIGHT = { x: -0.42, y: -0.91 };
 
-/** Épaisseur apparente : fuite horizontale par rapport au centre, et chute. */
-const DEPTH_SIDE = 0.05;
-const DEPTH_SIDE_MAX = 8;
-const DEPTH_DROP = 5.5;
+/**
+ * Décalage de l'épaisseur, identique pour tous les blocs : elle se voit du côté
+ * opposé à la lumière, donc en bas à droite, et jamais sur plus de deux faces.
+ * Le faire dépendre de la position à l'écran donnait une épaisseur sur une face
+ * au centre et sur deux au bord — incohérent d'un bloc à l'autre.
+ */
+const DEPTH = { x: 4.6, y: 6.8 };
 
 export interface BlockVisual {
   id: number;
@@ -297,8 +300,10 @@ export class Renderer {
       mx - l.x * w * 0.5,
       my - l.y * h * 0.5,
     );
-    rim.addColorStop(0, shade(base, -0.14));
-    rim.addColorStop(1, shade(base, -0.58));
+    // Assez pour détacher le bloc du fond, pas assez pour passer pour une
+    // tranche : seule l'épaisseur a le droit de faire du relief.
+    rim.addColorStop(0, shade(base, -0.04));
+    rim.addColorStop(1, shade(base, -0.4));
 
     return { body, rim };
   }
@@ -323,15 +328,9 @@ export class Renderer {
     const py = b.body.position.y + (jitter ? (Math.random() - 0.5) * jitter : 0);
 
     // Épaisseur : la même silhouette, décalée et assombrie, posée dessous.
-    // Le décalage est en repère monde et fuit le centre de l'écran, comme si
-    // une seule caméra regardait toute la scène.
-    const side = clamp(
-      (px - scene.width / 2) * DEPTH_SIDE,
-      -DEPTH_SIDE_MAX,
-      DEPTH_SIDE_MAX,
-    );
+    // Le décalage reste en repère monde, il ne tourne pas avec le bloc.
     ctx.save();
-    ctx.translate(px + side, py + DEPTH_DROP);
+    ctx.translate(px + DEPTH.x, py + DEPTH.y);
     ctx.rotate(angle);
     ctx.scale(sx, sy);
     ctx.lineJoin = 'round';
@@ -361,7 +360,7 @@ export class Renderer {
 
     // Le liseré vient d'un trait plus large passé dessous puis recouvert :
     // c'est le seul moyen de cerner la silhouette entière d'un seul contour.
-    ctx.lineWidth = pen + 3.4;
+    ctx.lineWidth = pen + 2.2;
     ctx.strokeStyle = paints.rim;
     ctx.fillStyle = paints.rim;
     ctx.stroke(art.path);
@@ -726,10 +725,6 @@ export class Renderer {
     ctx.stroke();
     ctx.restore();
   }
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
 }
 
 function easeOutBack(t: number): number {
