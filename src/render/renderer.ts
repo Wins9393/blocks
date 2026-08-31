@@ -1,6 +1,6 @@
 import type Matter from 'matter-js';
 import { GROUND_HEIGHT, UNIT } from '../core/constants';
-import { colorFor, rgba, shade } from '../core/palette';
+import { colorFor, parseHex, rgba, shade } from '../core/palette';
 import type { Sample } from '../input/gestures';
 import { DecorCache, drawCharacter } from './faces';
 import type { Pose, Wardrobe } from './faces';
@@ -20,6 +20,8 @@ export interface BlockVisual {
   squash: number;
   /** 0..1, tremblement pendant une secousse. */
   shake: number;
+  /** 0..1, le bloc rentre dans la corbeille : il rapetisse pour y tenir. */
+  sink: number;
   blink: number;
   dragged: boolean;
 }
@@ -50,7 +52,17 @@ export interface Scene {
   particles: Particle[];
   ghost: Ghost | null;
   slice: Sample[] | null;
-  trash: { x: number; y: number; w: number; h: number; hot: boolean; gulp: number };
+  trash: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    /** 0..1, le couvercle s'ouvre quand le doigt approche. */
+    hot: number;
+    gulp: number;
+    /** 0..1, apparition pendant un glisser. */
+    show: number;
+  };
   groundY: number;
   width: number;
   height: number;
@@ -105,12 +117,12 @@ export class Renderer {
     this.drawVignette(scene);
     this.drawGround(scene);
     for (const b of scene.blocks) this.drawShadow(b, scene.groundY);
-    this.drawTrash(scene);
+    this.drawTrashBack(scene);
     for (const b of scene.blocks) this.drawBlock(b, scene);
+    this.drawTrashFront(scene);
     // Les pastilles passent après tous les blocs : sinon, dans un tas, le
     // chiffre d'un bloc disparaît derrière celui dessiné juste après.
     for (const b of scene.blocks) this.drawBadge(b);
-    this.drawTrashRim(scene);
     if (scene.ghost) this.drawGhost(scene.ghost);
     this.drawParticles(scene.particles);
     if (scene.slice) this.drawSlice(scene.slice);
@@ -266,15 +278,30 @@ export class Renderer {
     if (scale <= 0.01) return;
 
     const sq = b.squash;
-    const sx = scale * (1 + sq * 0.22);
-    const sy = scale * (1 - sq * 0.22);
     const jitter = b.shake * 4;
     const angle = b.body.angle;
 
     const art = blockArt(b.value);
 
-    const px = b.body.position.x + (jitter ? (Math.random() - 0.5) * jitter : 0);
-    const py = b.body.position.y + (jitter ? (Math.random() - 0.5) * jitter : 0);
+    // Au-dessus de la corbeille, le bloc rétrécit juste ce qu'il faut pour y
+    // tenir et se recentre dedans : sans ça, un 10 dépasse du seau des deux
+    // côtés et n'a plus l'air d'y entrer.
+    const tenir = Math.min(
+      1,
+      (scene.trash.w * 0.74) / (art.right - art.left),
+      (scene.trash.h * 0.72) / (art.bottom - art.top),
+    );
+    const k = 1 + (tenir - 1) * b.sink;
+    const sx = scale * k * (1 + sq * 0.22);
+    const sy = scale * k * (1 - sq * 0.22);
+    const vers = 0.9 * b.sink;
+
+    const px =
+      b.body.position.x + (scene.trash.x - b.body.position.x) * vers +
+      (jitter ? (Math.random() - 0.5) * jitter : 0);
+    const py =
+      b.body.position.y + (scene.trash.y - b.body.position.y) * vers +
+      (jitter ? (Math.random() - 0.5) * jitter : 0);
 
     ctx.save();
     ctx.translate(px, py);
@@ -342,6 +369,9 @@ export class Renderer {
   }
 
   private drawBadge(b: BlockVisual) {
+    // Un bloc qui descend dans la corbeille emmène sa pastille ailleurs — elle
+    // remontait se coincer dans la barre du haut. Elle s'efface avec lui.
+    if (b.sink > 0.98) return;
     const { ctx } = this;
     const base = colorFor(b.value);
     const label = String(b.value);
@@ -363,6 +393,7 @@ export class Renderer {
     }
 
     ctx.save();
+    ctx.globalAlpha = 1 - b.sink;
     ctx.translate(x, y);
     ctx.shadowColor = 'rgba(6, 9, 16, 0.5)';
     ctx.shadowBlur = 9;
@@ -488,69 +519,139 @@ export class Renderer {
 
   // --- corbeille ----------------------------------------------------------
 
-  private drawTrash({ trash, time }: Scene) {
+  /** Géométrie du seau, partagée par les deux passes. */
+  private trashGeom(trash: Scene['trash']) {
+    const top = -trash.h / 2 + 12;
+    const bot = trash.h / 2;
+    const haut = trash.w / 2;
+    const bas = trash.w * 0.41;
+    const lip = 9;
+
+    // La lèvre avant suit l'ellipse de l'ouverture : c'est elle qui donne au
+    // seau sa profondeur, et c'est derrière elle que le bloc plonge.
+    const corps = new Path2D();
+    corps.moveTo(-haut, top);
+    corps.lineTo(-bas, bot - 12);
+    corps.quadraticCurveTo(-bas, bot, -bas + 12, bot);
+    corps.lineTo(bas - 12, bot);
+    corps.quadraticCurveTo(bas, bot, bas, bot - 12);
+    corps.lineTo(haut, top);
+    corps.ellipse(0, top, haut, lip, 0, 0, Math.PI);
+    corps.closePath();
+
+    return { top, bot, haut, bas, lip, corps };
+  }
+
+  private trashPose(trash: Scene['trash'], time: number) {
+    const pulse = trash.hot > 0 ? (0.05 + Math.sin(time / 140) * 0.015) * trash.hot : 0;
+    return (0.84 + 0.16 * trash.show) * (1 + pulse - trash.gulp * 0.18);
+  }
+
+  /**
+   * Le fond du seau et son couvercle, posés avant les blocs.
+   *
+   * La corbeille n'apparaît que pendant un glisser, et flotte en haut de la
+   * scène : posée en permanence sur le sol, elle occupait un coin du terrain
+   * de jeu et les blocs venaient s'empiler contre elle. Le couvercle se
+   * soulève quand le doigt approche — c'est ce geste qui dit « pose-le ici »,
+   * sans un mot à lire.
+   */
+  private drawTrashBack({ trash, time }: Scene) {
+    if (trash.show <= 0.01) return;
     const { ctx } = this;
-    const s =
-      1 + (trash.hot ? 0.09 + Math.sin(time / 120) * 0.02 : 0) - trash.gulp * 0.16;
-    const w = trash.w;
-    const h = trash.h;
+    const { hot, w } = trash;
+    const { top, haut, lip } = this.trashGeom(trash);
 
     ctx.save();
+    ctx.globalAlpha = trash.show;
     ctx.translate(trash.x, trash.y);
-    ctx.scale(s, s);
+    ctx.scale(this.trashPose(trash, time), this.trashPose(trash, time));
 
-    const shell = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-    if (trash.hot) {
-      shell.addColorStop(0, '#6c7ca3');
-      shell.addColorStop(1, '#3d4763');
-    } else {
-      shell.addColorStop(0, '#4a5673');
-      shell.addColorStop(1, '#2c3548');
+    if (hot > 0.01) {
+      const halo = ctx.createRadialGradient(0, 0, w * 0.24, 0, 0, w * 0.98);
+      halo.addColorStop(0, `rgba(255, 126, 112, ${(0.36 * hot).toFixed(3)})`);
+      halo.addColorStop(1, 'rgba(255, 126, 112, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0, 0, w * 0.98, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.fillStyle = shell;
-    ctx.beginPath();
-    ctx.roundRect(-w / 2, -h / 2, w, h, 13);
-    ctx.fill();
 
-    // Intérieur : un puits, pas un disque plat.
-    const mouthY = -h / 2 + 7;
-    const well = ctx.createRadialGradient(0, mouthY, 1, 0, mouthY, w / 2);
+    // L'intérieur : un puits, pas un disque plat.
+    const well = ctx.createRadialGradient(0, top, 1, 0, top, haut);
     well.addColorStop(0, '#05070c');
-    well.addColorStop(1, '#151b28');
+    well.addColorStop(1, mix('#1A2130', '#5E2A22', hot));
     ctx.fillStyle = well;
     ctx.beginPath();
-    ctx.ellipse(0, mouthY, w / 2 - 7, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, top, haut, lip, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    for (const x of [-w * 0.22, 0, w * 0.22]) {
-      ctx.strokeStyle = 'rgba(10, 14, 22, 0.3)';
-      ctx.lineWidth = 3;
+    ctx.strokeStyle = `rgba(226, 238, 255, ${(0.2 + 0.4 * hot).toFixed(2)})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, top, haut, lip, 0, Math.PI, 2 * Math.PI);
+    ctx.stroke();
+
+    // Couvercle : il pivote sur sa charnière gauche.
+    ctx.save();
+    ctx.translate(-haut - 5, top - 9);
+    ctx.rotate(-0.5 * hot);
+    ctx.fillStyle = mix('#77849F', '#F79881', hot);
+    ctx.beginPath();
+    ctx.roundRect(0, -6, w + 10, 12, 6);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(w / 2 - 4, -14, 18, 9, 4.5);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  /** La paroi avant, posée après les blocs : le bloc lâché plonge derrière. */
+  private drawTrashFront({ trash, time }: Scene) {
+    if (trash.show <= 0.01) return;
+    const { ctx } = this;
+    const { hot, w } = trash;
+    const { top, bot, corps } = this.trashGeom(trash);
+
+    ctx.save();
+    ctx.globalAlpha = trash.show;
+    ctx.translate(trash.x, trash.y);
+    ctx.scale(this.trashPose(trash, time), this.trashPose(trash, time));
+
+    const shell = ctx.createLinearGradient(0, top, 0, bot);
+    shell.addColorStop(0, mix('#546080', '#F0866F', hot));
+    shell.addColorStop(1, mix('#2C3548', '#C4523B', hot));
+    ctx.fillStyle = shell;
+    ctx.fill(corps);
+    ctx.strokeStyle = `rgba(226, 238, 255, ${(0.2 + 0.35 * hot).toFixed(2)})`;
+    ctx.lineWidth = 2;
+    ctx.stroke(corps);
+
+    ctx.save();
+    ctx.clip(corps);
+    ctx.strokeStyle = 'rgba(10, 14, 22, 0.24)';
+    ctx.lineWidth = 3;
+    for (const x of [-w * 0.16, 0, w * 0.16]) {
       ctx.beginPath();
-      ctx.moveTo(x, -h / 2 + 26);
-      ctx.lineTo(x, h / 2 - 13);
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(226, 238, 255, 0.11)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x + 2.5, -h / 2 + 26);
-      ctx.lineTo(x + 2.5, h / 2 - 13);
+      ctx.moveTo(x, top + 14);
+      ctx.lineTo(x * 0.82, bot);
       ctx.stroke();
     }
     ctx.restore();
-  }
 
-  /** Le rebord passe après les blocs : un bloc glissé dedans plonge derrière. */
-  private drawTrashRim({ trash }: Scene) {
-    const { ctx } = this;
-    ctx.save();
-    ctx.translate(trash.x, trash.y);
-    ctx.strokeStyle = trash.hot ? 'rgba(255, 255, 255, 0.92)' : 'rgba(226, 238, 255, 0.22)';
-    ctx.lineWidth = trash.hot ? 3.5 : 2;
-    ctx.beginPath();
-    ctx.ellipse(0, -trash.h / 2 + 7, trash.w / 2 - 7, 10, 0, 0, Math.PI * 2);
-    ctx.stroke();
     ctx.restore();
   }
+}
+
+/** Fondu entre deux couleurs, pour passer du gris au rouge sans à-coup. */
+function mix(a: string, b: string, t: number): string {
+  const [r1, g1, b1] = parseHex(a);
+  const [r2, g2, b2] = parseHex(b);
+  const k = Math.max(0, Math.min(1, t));
+  const c = (x: number, y: number) => Math.round(x + (y - x) * k);
+  return `rgb(${c(r1, r2)}, ${c(g1, g2)}, ${c(b1, b2)})`;
 }
 
 function easeOutBack(t: number): number {

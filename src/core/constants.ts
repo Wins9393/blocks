@@ -49,4 +49,10 @@ export const GROUND_HEIGHT = 26;
 // Deux rangees de cinq blocs, plus assez de marge pour que le sol reste
 // visible au-dessus : sans bande de sol, les blocs ont l'air de flotter.
 export const BOTTOM_SAFE = 178;
-export const TRASH_W = 96;
+/**
+ * Corbeille : elle ne se montre que pendant un glisser, et flotte en haut de
+ * la scène. Posée en permanence sur le sol, elle occupait un coin du terrain
+ * et les blocs venaient s'empiler contre elle.
+ */
+export const TRASH_W = 112;
+export const TRASH_Y = 148;

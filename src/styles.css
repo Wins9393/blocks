@@ -442,6 +442,13 @@ button:disabled {
   box-shadow: 0 1px 0 #b9862a;
 }
 
+/* Le cinquieme conseil est seul sur sa ligne : centre, il ne pend pas a
+   gauche d'une rangee a moitie vide. */
+.hints-grid > .hint:nth-child(5):last-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
 .hint {
   display: flex;
   flex-direction: column;

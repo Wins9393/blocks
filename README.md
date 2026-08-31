@@ -20,7 +20,7 @@ npm install && npm run dev
 | Glisser un bloc contre un autre, puis lâcher | fusion — un aperçu montre `3 + 4 = 7` avant de valider |
 | Tenir un bloc et le **secouer** | détache une unité à chaque secousse |
 | Tracer un **trait franc** à travers un bloc | le coupe en deux là où le trait passe |
-| Lâcher un bloc dans la **corbeille** | le supprime (annulable) |
+| Monter un bloc dans la **corbeille** | le supprime (annulable) |
 
 ## Décisions de conception
 
@@ -58,6 +58,19 @@ tient quel que soit le chapeau choisi.
 montre les blocs de 1 à 10 avec leur silhouette réelle et leur personnage : le
 bouton montre exactement ce qu'il pose. Deux dessins séparés auraient divergé au
 premier changement de coiffure.
+
+**La corbeille n'existe que pendant un glisser.** Posée en permanence sur le
+sol, elle occupait un coin du terrain, coupait la surface de jeu en deux et
+récoltait les piles — c'était un obstacle physique autant qu'un objet à
+regarder. Elle n'est plus un corps : c'est une cible qui apparaît en haut de la
+scène dès qu'un bloc est tenu, dans la seule bande qui reste toujours vide, et
+qui s'efface au relâché. Le couvercle se soulève quand le doigt approche, et le
+bloc rétrécit juste ce qu'il faut pour tenir dans le seau : c'est ce geste qui
+dit « pose-le ici », sans un mot à lire.
+
+Le seau est dessiné en deux passes, avant et après les blocs, pour que le bloc
+plonge derrière la paroi avant. Une seule passe et il flottait par-dessus, ou
+disparaissait sous le seau.
 
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre
 construction *et sa propre garde-robe* (`src/game/persist.ts`). Changer d'espace

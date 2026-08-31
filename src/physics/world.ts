@@ -1,5 +1,12 @@
 import Matter from 'matter-js';
-import { DRAG_MAX_SPIN, DRAG_STRAIGHTEN, GRAVITY_Y, TRASH_W, UNIT } from '../core/constants';
+import {
+  DRAG_MAX_SPIN,
+  DRAG_STRAIGHTEN,
+  GRAVITY_Y,
+  TRASH_W,
+  TRASH_Y,
+  UNIT,
+} from '../core/constants';
 import { rectanglesFor, shapeFor } from '../core/shape';
 import type { Shape } from '../core/shape';
 
@@ -42,10 +49,13 @@ export class World {
   width = 0;
   height = 0;
   groundY = 0;
-  trash = { x: 0, y: 0, w: TRASH_W, h: TRASH_W * 0.82 };
+  /**
+   * Zone de dépôt de la corbeille. Ce n'est plus un corps : un obstacle posé
+   * sur le sol coupait le terrain en deux et récoltait les piles.
+   */
+  trash = { x: 0, y: 0, w: TRASH_W, h: TRASH_W * 0.86 };
 
   private walls: Matter.Body[] = [];
-  private trashBody: Matter.Body | null = null;
 
   constructor() {
     this.engine = Engine.create({ enableSleeping: true });
@@ -77,7 +87,6 @@ export class World {
     this.groundY = height - bottomInset;
 
     Composite.remove(this.engine.world, this.walls);
-    if (this.trashBody) Composite.remove(this.engine.world, this.trashBody);
 
     const T = 400;
     const opts = { isStatic: true, friction: 0.6, restitution: 0.02 };
@@ -89,16 +98,11 @@ export class World {
     ];
     Composite.add(this.engine.world, this.walls);
 
-    // Sur un écran de téléphone, une corbeille à taille fixe mangerait un
-    // quart du sol : elle suit la largeur disponible.
-    const tw = Math.round(Math.min(TRASH_W, Math.max(64, width * 0.19)));
-    const th = Math.round(tw * 0.82);
-    this.trash = { x: width - tw / 2 - 16, y: this.groundY - th / 2, w: tw, h: th };
-    this.trashBody = Bodies.rectangle(this.trash.x, this.trash.y, tw, th, {
-      isStatic: true,
-      friction: 0.9,
-    });
-    Composite.add(this.engine.world, this.trashBody);
+    // Centrée en haut : c'est la seule bande de scène qui reste vide, donc la
+    // corbeille n'y recouvre jamais une construction. Sa taille suit l'écran.
+    const tw = Math.round(Math.min(TRASH_W, Math.max(78, width * 0.24)));
+    const th = Math.round(tw * 0.86);
+    this.trash = { x: Math.round(width / 2), y: Math.min(TRASH_Y, this.groundY - th), w: tw, h: th };
   }
 
   add(value: number, x: number, y: number, angle = 0, velocity?: Matter.Vector, id?: number): Block {
@@ -149,13 +153,15 @@ export class World {
     Sleeping.set(block.body, false);
   }
 
+  /** Marge généreuse et symétrique : on vise avec un doigt, pas au pixel. */
   isOverTrash(point: Bounds): boolean {
     const t = this.trash;
+    const pad = 24;
     return (
-      point.x > t.x - t.w / 2 - 12 &&
-      point.x < t.x + t.w / 2 + 12 &&
-      point.y > t.y - t.h / 2 - 56 &&
-      point.y < t.y + t.h / 2 + 12
+      point.x > t.x - t.w / 2 - pad &&
+      point.x < t.x + t.w / 2 + pad &&
+      point.y > t.y - t.h / 2 - pad &&
+      point.y < t.y + t.h / 2 + pad
     );
   }
 

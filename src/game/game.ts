@@ -71,6 +71,9 @@ export class Game {
   private particles: Particle[] = [];
   private undoStack: SavedBlock[][] = [];
   private trashGulp = 0;
+  /** 0..1 : la corbeille n'existe à l'écran que pendant un glisser. */
+  private trashShow = 0;
+  private trashHot = 0;
   private pointer: { x: number; y: number } | null = null;
   private raf = 0;
   private acc = 0;
@@ -216,6 +219,8 @@ export class Game {
     for (const block of this.world.blocks.values()) {
       this.burst(block, 2, this.world.trash);
     }
+    // La corbeille se montre pour avaler la fournée, puis s'efface.
+    this.trashGulp = 1;
     this.world.clear();
     this.visuals.clear();
     this.drags.clear();
@@ -701,7 +706,9 @@ export class Game {
 
   private frame = (now: number) => {
     this.raf = requestAnimationFrame(this.frame);
-    const dt = Math.min(64, now - this.last);
+    // Borné des deux côtés : un pas négatif ferait remonter les animations
+    // au lieu de les avancer, et les blocs repartiraient en arrière.
+    const dt = Math.min(64, Math.max(0, now - this.last));
     this.last = now;
     this.time = now;
 
@@ -719,6 +726,14 @@ export class Game {
     this.updateVisuals(dt);
     this.stepParticles(dt);
     this.trashGulp = Math.max(0, this.trashGulp - dt / 260);
+
+    // Elle apparaît dès qu'un bloc est tenu, et repart dès qu'on lâche.
+    const visible = this.drags.size > 0 || this.trashGulp > 0;
+    this.trashShow = clamp(this.trashShow + (visible ? dt / 130 : -dt / 190), 0, 1);
+    const survolee = [...this.drags.values()].some((d) =>
+      this.world.isOverTrash({ x: d.px, y: d.py }),
+    );
+    this.trashHot = clamp(this.trashHot + (survolee ? dt / 90 : -dt / 110), 0, 1);
 
     this.renderer.draw(this.buildScene());
 
@@ -762,6 +777,15 @@ export class Game {
     for (const drag of this.drags.values()) drag.shake.decay(dt);
   }
 
+  /** Les blocs tenus au-dessus de la corbeille, prêts à y tomber. */
+  private get plongeurs(): Set<number> {
+    const ids = new Set<number>();
+    for (const d of this.drags.values()) {
+      if (this.world.isOverTrash({ x: d.px, y: d.py })) ids.add(d.blockId);
+    }
+    return ids;
+  }
+
   private buildScene(): Scene {
     const blocks: BlockVisual[] = [];
     for (const block of this.world.blocks.values()) {
@@ -775,13 +799,12 @@ export class Game {
         shake: v.shake,
         blink: v.blink,
         dragged: this.isDragged(block.id),
+        sink: this.plongeurs.has(block.id) ? this.trashHot : 0,
       });
     }
 
     let ghost: Ghost | null = null;
-    let trashHot = false;
     for (const drag of this.drags.values()) {
-      if (this.world.isOverTrash({ x: drag.px, y: drag.py })) trashHot = true;
       const block = this.world.blocks.get(drag.blockId);
       const other = drag.candidate != null ? this.world.blocks.get(drag.candidate) : null;
       if (block && other && !ghost) {
@@ -812,7 +835,12 @@ export class Game {
       particles: this.particles,
       ghost,
       slice: slicePath,
-      trash: { ...this.world.trash, hot: trashHot, gulp: this.trashGulp },
+      trash: {
+        ...this.world.trash,
+        hot: this.trashHot,
+        gulp: this.trashGulp,
+        show: this.trashShow,
+      },
       groundY: this.world.groundY,
       width: this.world.width,
       height: this.world.height,
