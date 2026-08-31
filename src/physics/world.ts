@@ -1,5 +1,5 @@
 import Matter from 'matter-js';
-import { GRAVITY_Y, TRASH_W, UNIT } from '../core/constants';
+import { DRAG_MAX_SPIN, DRAG_STRAIGHTEN, GRAVITY_Y, TRASH_W, UNIT } from '../core/constants';
 import { rectanglesFor, shapeFor } from '../core/shape';
 import type { Shape } from '../core/shape';
 
@@ -153,6 +153,21 @@ export class World {
   step(dt: number) {
     Engine.update(this.engine, dt);
   }
+}
+
+/**
+ * Vitesse angulaire à appliquer pour redresser un bloc tenu au doigt.
+ *
+ * `angle` est cumulatif dans Matter : un bloc qui a culbuté deux fois vaut
+ * 12 rad tout en paraissant droit. On vise donc l'orientation droite la plus
+ * proche, et on plafonne : sans borne, la correction devient une gifle
+ * proportionnelle au nombre de tours déjà faits, et chaque prise multiplie la
+ * rotation au lieu de la calmer.
+ */
+export function rightingSpin(angle: number): number {
+  const tilt = Math.atan2(Math.sin(angle), Math.cos(angle));
+  const spin = -tilt * DRAG_STRAIGHTEN;
+  return Math.max(-DRAG_MAX_SPIN, Math.min(DRAG_MAX_SPIN, spin));
 }
 
 /**

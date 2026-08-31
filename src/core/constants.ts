@@ -16,6 +16,10 @@ export const MAX_SUBSTEPS = 3;
 export const DRAG_GAIN = 0.34;
 export const DRAG_MAX_SPEED = 48;
 
+/** Redressement du bloc tenu : gain, et vitesse angulaire max en rad/pas. */
+export const DRAG_STRAIGHTEN = 0.18;
+export const DRAG_MAX_SPIN = 0.12;
+
 /** Fusion : écart maximal entre deux cubes pour que la fusion soit proposée. */
 export const MERGE_GAP = 18;
 
@@ -31,6 +35,14 @@ export const SHAKE_PEEL_COOLDOWN = 170;
 /** Découpe : longueur minimale d'un trait pour qu'il compte comme une coupe. */
 export const SLICE_MIN_LENGTH = 64;
 export const SLICE_MIN_SPEED = 0.25;
+
+/**
+ * Taille de repli quand la fenêtre n'est pas mesurable au démarrage (onglet
+ * ouvert en arrière-plan, page dans un cadre masqué) : sans elle, le monde
+ * resterait sans sol ni murs et la scène tomberait dans le vide.
+ */
+export const FALLBACK_WIDTH = 390;
+export const FALLBACK_HEIGHT = 700;
 
 /** Mise en page. */
 export const GROUND_HEIGHT = 26;

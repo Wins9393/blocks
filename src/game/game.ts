@@ -3,6 +3,8 @@ import {
   BOTTOM_SAFE,
   DRAG_GAIN,
   DRAG_MAX_SPEED,
+  FALLBACK_HEIGHT,
+  FALLBACK_WIDTH,
   FIXED_DT,
   MAX_SUBSTEPS,
   MAX_UNITS,
@@ -16,7 +18,7 @@ import { centeredCells, shapeFor } from '../core/shape';
 import * as sfx from '../audio/sfx';
 import { ShakeDetector, partitionByCut, segmentHitsBox, sliceFromPath } from '../input/gestures';
 import type { Cut, Sample } from '../input/gestures';
-import { World, minPartGap } from '../physics/world';
+import { World, minPartGap, rightingSpin } from '../physics/world';
 import type { Block } from '../physics/world';
 import { Renderer } from '../render/renderer';
 import type { BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
@@ -139,10 +141,19 @@ export class Game {
   private handleResize = () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    // Onglet masqué ou panneau replié : la fenêtre peut mesurer zéro. Rebâtir
-    // les murs sur ces valeurs les ferait sortir de l'écran et la scène
-    // tomberait dans le vide.
-    if (w < 2 || h < 2) return;
+
+    // Onglet masqué ou panneau replié : la fenêtre peut mesurer zéro.
+    if (w < 2 || h < 2) {
+      // Une scène déjà bâtie n'a rien à y gagner : on la laisse intacte et on
+      // attend le prochain redimensionnement. Mais s'il s'agit du tout premier
+      // dimensionnement, il faut bien une taille de repli, sans quoi le monde
+      // reste sans sol ni murs et tout tombe dans le vide.
+      if (this.world.width > 0) return;
+      this.renderer.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT);
+      this.world.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT, BOTTOM_SAFE);
+      return;
+    }
+
     this.renderer.resize(w, h);
     this.world.resize(w, h, BOTTOM_SAFE);
   };
@@ -211,7 +222,9 @@ export class Game {
       v: b.value,
       x: Math.round(b.body.position.x),
       y: Math.round(b.body.position.y),
-      a: Number(b.body.angle.toFixed(3)),
+      // Angle ramené dans [-pi, pi] : le cumul des tours n'a aucun sens à
+      // relire et finit par ronger la précision des sinus.
+      a: Number(Math.atan2(Math.sin(b.body.angle), Math.cos(b.body.angle)).toFixed(3)),
     }));
   }
 
@@ -379,7 +392,7 @@ export class Game {
       }
       Sleeping.set(block.body, false);
       Body.setVelocity(block.body, { x: vx, y: vy });
-      Body.setAngularVelocity(block.body, -block.body.angle * 0.18);
+      Body.setAngularVelocity(block.body, rightingSpin(block.body.angle));
     }
   }
 
