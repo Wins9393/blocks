@@ -2,6 +2,7 @@ import type Matter from 'matter-js';
 import { GROUND_HEIGHT, UNIT } from '../core/constants';
 import { colorFor, rgba, shade } from '../core/palette';
 import { centeredCells, shapeFor } from '../core/shape';
+import { CORNER, blockArt } from './silhouette';
 import type { Sample } from '../input/gestures';
 
 const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -apple-system, sans-serif";
@@ -166,42 +167,56 @@ export class Renderer {
     ctx.scale(sx, sy);
 
     const cells = centeredCells(b.value);
-    const r = UNIT * 0.24;
-    const inset = 1.2;
-    const size = UNIT - inset * 2;
+    const art = blockArt(b.value);
+    const w = 2 * CORNER;
 
-    for (const c of cells) {
-      const x = c.x * UNIT - size / 2;
-      const y = c.y * UNIT - size / 2;
-      const g = ctx.createLinearGradient(x, y, x, y + size);
-      g.addColorStop(0, shade(base, 0.22));
-      g.addColorStop(0.45, base);
-      g.addColorStop(1, shade(base, -0.2));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.roundRect(x, y, size, size, r);
-      ctx.fill();
+    const body = ctx.createLinearGradient(0, art.top, 0, art.bottom);
+    body.addColorStop(0, shade(base, 0.26));
+    body.addColorStop(0.5, base);
+    body.addColorStop(1, shade(base, -0.24));
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.beginPath();
-      ctx.roundRect(x + size * 0.16, y + size * 0.13, size * 0.68, size * 0.14, size * 0.07);
-      ctx.fill();
-
-      ctx.strokeStyle = shade(base, -0.34);
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.roundRect(x, y, size, size, r);
-      ctx.stroke();
-    }
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
     if (b.dragged) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.lineWidth = 2.5;
-      for (const c of cells) {
-        ctx.beginPath();
-        ctx.roundRect(c.x * UNIT - size / 2, c.y * UNIT - size / 2, size, size, r);
-        ctx.stroke();
-      }
+      ctx.lineWidth = w + 8;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.stroke(art.path);
+    }
+
+    // Le liseré sombre vient d'un trait plus large passé dessous, puis recouvert :
+    // c'est le seul moyen de cerner la silhouette entière d'un seul contour.
+    ctx.lineWidth = w + 3;
+    ctx.strokeStyle = shade(base, -0.42);
+    ctx.fillStyle = shade(base, -0.42);
+    ctx.stroke(art.path);
+    ctx.fill(art.path);
+
+    ctx.lineWidth = w;
+    ctx.strokeStyle = body;
+    ctx.fillStyle = body;
+    ctx.stroke(art.path);
+    ctx.fill(art.path);
+
+    for (const [x, y, hw, hh] of art.highlights) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.26)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, hw, hh, hh / 2);
+      ctx.fill();
+    }
+
+    ctx.lineWidth = 1.8;
+    for (const [x1, y1, x2, y2] of art.seams) {
+      ctx.strokeStyle = shade(base, -0.3);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.13)';
+      ctx.beginPath();
+      ctx.moveTo(x1 + (y1 === y2 ? 0 : 1.4), y1 + (y1 === y2 ? 1.4 : 0));
+      ctx.lineTo(x2 + (y1 === y2 ? 0 : 1.4), y2 + (y1 === y2 ? 1.4 : 0));
+      ctx.stroke();
     }
 
     this.drawFace(b, cells, base, scene);
@@ -279,34 +294,45 @@ export class Renderer {
     const { ctx } = this;
     const sum = ghost.a + ghost.b;
     const color = ghost.ok ? colorFor(sum) : '#ff6b6b';
-    const cells = centeredCells(ghost.ok ? sum : 1);
-    const size = UNIT - 2.4;
+    const art = blockArt(ghost.ok ? sum : 1);
 
     ctx.save();
     ctx.translate(ghost.x, ghost.y);
-    ctx.setLineDash([7, 6]);
-    ctx.lineWidth = 2.4;
-    ctx.strokeStyle = rgba(ghost.ok ? color : '#ff6b6b', 0.9);
-    ctx.fillStyle = rgba(ghost.ok ? color : '#ff6b6b', 0.16);
-    for (const c of cells) {
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    // Liseré plein puis intérieur assombri : deux passes translucides
+    // s'additionneraient dans leur recouvrement et l'aperçu paraîtrait solide.
+    ctx.lineWidth = 2 * CORNER + 6;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.stroke(art.path);
+    ctx.fill(art.path);
+
+    ctx.lineWidth = 2 * CORNER;
+    ctx.strokeStyle = 'rgba(24, 30, 44, 0.84)';
+    ctx.fillStyle = 'rgba(24, 30, 44, 0.84)';
+    ctx.stroke(art.path);
+    ctx.fill(art.path);
+
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = rgba(color, 0.75);
+    for (const [x1, y1, x2, y2] of art.seams) {
       ctx.beginPath();
-      ctx.roundRect(c.x * UNIT - size / 2, c.y * UNIT - size / 2, size, size, UNIT * 0.24);
-      ctx.fill();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
     }
-    ctx.setLineDash([]);
 
     const text = ghost.ok ? `${ghost.a} + ${ghost.b} = ${sum}` : 'trop gros !';
-    const minY = cells.reduce((m, c) => Math.min(m, c.y), 0);
-    const top = (minY - 0.5) * UNIT - 24;
     ctx.font = `800 20px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 5;
     ctx.strokeStyle = 'rgba(16, 20, 30, 0.85)';
-    ctx.strokeText(text, 0, top);
+    ctx.strokeText(text, 0, art.top - 24);
     ctx.fillStyle = ghost.ok ? '#ffffff' : '#ff9c9c';
-    ctx.fillText(text, 0, top);
+    ctx.fillText(text, 0, art.top - 24);
     ctx.restore();
   }
 
