@@ -51,8 +51,10 @@ body,
   border-radius: 999px;
   background: var(--panel);
   border: 1px solid var(--panel-edge);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 34px rgba(0, 0, 0, 0.45);
 }
 
 button {
@@ -68,15 +70,22 @@ button {
   width: 84px;
   height: 60px;
   border-radius: 22px;
-  background: linear-gradient(180deg, #ffdb85, #f0b73f);
+  background: linear-gradient(180deg, #ffe4a0 0%, #ffd275 38%, #efb43c 100%);
   color: #3a2b06;
-  box-shadow: 0 5px 0 #b9862a, 0 10px 20px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -2px 0 rgba(150, 104, 26, 0.35),
+    0 5px 0 #b9862a,
+    0 11px 22px rgba(0, 0, 0, 0.38);
   transition: transform 90ms ease, box-shadow 90ms ease;
 }
 
 .add-btn:active:not(:disabled) {
   transform: translateY(4px);
-  box-shadow: 0 1px 0 #b9862a, 0 4px 10px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.6),
+    0 1px 0 #b9862a,
+    0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
 .add-sign {
@@ -91,8 +100,9 @@ button {
   border-radius: 16px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045));
   border: 1px solid var(--panel-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition: background 120ms ease, transform 90ms ease;
 }
 
@@ -107,8 +117,14 @@ button {
 }
 
 .icon-btn.armed {
-  background: #e4715e;
+  background: linear-gradient(180deg, #ec8271, #d75f4c);
   border-color: #ff9d8d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+button:focus-visible {
+  outline: 2.5px solid #ffd275;
+  outline-offset: 3px;
 }
 
 .icon-btn svg {
@@ -161,7 +177,9 @@ button:disabled {
   border-radius: 26px;
   background: var(--panel);
   border: 1px solid var(--panel-edge);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 24px 64px rgba(0, 0, 0, 0.55);
 }
 
 .hints-title {
@@ -181,9 +199,11 @@ button:disabled {
   border-radius: 18px;
   font-size: 17px;
   font-weight: 800;
-  background: linear-gradient(180deg, #ffdb85, #f0b73f);
+  background: linear-gradient(180deg, #ffe4a0 0%, #ffd275 38%, #efb43c 100%);
   color: #3a2b06;
-  box-shadow: 0 4px 0 #b9862a;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
+    0 4px 0 #b9862a;
 }
 
 .hints-close:active {
@@ -202,6 +222,22 @@ button:disabled {
 
 .hint-icon {
   font-size: 34px;
+  line-height: 40px;
+}
+
+.hint-chip {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 40px;
+  border-radius: 14px;
+  font-size: 19px;
+  font-weight: 800;
+  color: #3a2b06;
+  background: linear-gradient(180deg, #ffe4a0 0%, #ffd275 38%, #efb43c 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
+    0 3px 0 #b9862a;
 }
 
 .hint-label {

@@ -18,6 +18,8 @@ export interface BlockArt {
   highlights: Array<[number, number, number, number]>;
   top: number;
   bottom: number;
+  left: number;
+  right: number;
 }
 
 const cache = new Map<number, BlockArt>();
@@ -135,6 +137,8 @@ export function blockArt(value: number): BlockArt {
     highlights,
     top: Math.min(...cells.map((c) => c.y)) * UNIT - half,
     bottom: Math.max(...cells.map((c) => c.y)) * UNIT + half,
+    left: Math.min(...cells.map((c) => c.x)) * UNIT - half,
+    right: Math.max(...cells.map((c) => c.x)) * UNIT + half,
   };
   cache.set(value, art);
   return art;

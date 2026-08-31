@@ -46,5 +46,7 @@ export const FALLBACK_HEIGHT = 700;
 
 /** Mise en page. */
 export const GROUND_HEIGHT = 26;
-export const BOTTOM_SAFE = 96;
+// Assez de marge pour que le sol reste visible au-dessus de la barre d'outils :
+// sans bande de sol, les blocs ont l'air de flotter au-dessus du vide.
+export const BOTTOM_SAFE = 124;
 export const TRASH_W = 96;
