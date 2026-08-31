@@ -1,7 +1,7 @@
 import { UNIT } from '../core/constants';
 import { shade } from '../core/palette';
-import { drawCharacter } from './faces';
-import type { Pose } from './faces';
+import { drawCharacter, drawHead } from './faces';
+import type { ResolvedLook, Wardrobe } from './faces';
 import { CORNER, blockArt } from './silhouette';
 import type { BlockArt } from './silhouette';
 
@@ -160,8 +160,10 @@ export function paintSeams(ctx: CanvasRenderingContext2D, art: BlockArt, angle: 
 }
 
 /** Marges laissées autour de la silhouette pour ce qui dépasse de la tête. */
-const OVER_TOP = UNIT * 0.4;
+const OVER_TOP = UNIT * 0.5;
 const OVER_SIDE = UNIT * 0.18;
+/** La barbe et l'écharpe descendent un peu sous la case du visage. */
+const OVER_BOTTOM = UNIT * 0.06;
 
 /**
  * Un bloc entier, personnage compris, mis à l'échelle pour tenir dans une
@@ -174,20 +176,49 @@ export function drawBlockThumb(
   base: string,
   boxW: number,
   boxH: number,
-  pose?: Pose,
+  wardrobe?: Wardrobe,
 ) {
   const art = blockArt(value);
   const left = art.left - OVER_SIDE;
   const right = art.right + OVER_SIDE;
   const top = art.top - OVER_TOP;
-  const bottom = art.bottom;
+  const bottom = art.bottom + OVER_BOTTOM;
   const scale = Math.min(boxW / (right - left), boxH / (bottom - top));
 
   ctx.save();
-  ctx.translate(boxW / 2 - scale * (left + right) / 2, boxH / 2 - scale * (top + bottom) / 2);
+  ctx.translate(boxW / 2 - (scale * (left + right)) / 2, boxH / 2 - (scale * (top + bottom)) / 2);
   ctx.scale(scale, scale);
   paintBody(ctx, art, blockPaints(ctx, art, base, 0));
   paintSeams(ctx, art, 0);
-  drawCharacter(ctx, value, base, pose);
+  drawCharacter(ctx, value, base, undefined, undefined, wardrobe);
+  ctx.restore();
+}
+
+/**
+ * Une tête seule sur son cube, au plus grand possible. L'atelier montre ainsi
+ * chaque pièce à une taille où on la distingue : dans la silhouette entière
+ * d'un 10, un sourcil fait deux pixels.
+ */
+export function drawFaceThumb(
+  ctx: CanvasRenderingContext2D,
+  base: string,
+  look: ResolvedLook,
+  boxW: number,
+  boxH: number,
+) {
+  const art = blockArt(1);
+  const left = art.left - OVER_SIDE;
+  const right = art.right + OVER_SIDE;
+  const top = art.top - OVER_TOP;
+  const bottom = art.bottom + OVER_BOTTOM;
+  const scale = Math.min(boxW / (right - left), boxH / (bottom - top));
+
+  ctx.save();
+  ctx.translate(boxW / 2 - (scale * (left + right)) / 2, boxH / 2 - (scale * (top + bottom)) / 2);
+  ctx.scale(scale, scale);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  paintBody(ctx, art, blockPaints(ctx, art, base, 0));
+  drawHead(ctx, look, base);
   ctx.restore();
 }

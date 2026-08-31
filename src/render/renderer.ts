@@ -3,7 +3,7 @@ import { GROUND_HEIGHT, UNIT } from '../core/constants';
 import { colorFor, rgba, shade } from '../core/palette';
 import type { Sample } from '../input/gestures';
 import { DecorCache, drawCharacter } from './faces';
-import type { Pose } from './faces';
+import type { Pose, Wardrobe } from './faces';
 import { LIGHT, PEN, blockPaints, paintBody, paintSeams } from './paint';
 import { CORNER, blockArt } from './silhouette';
 import type { BlockArt } from './silhouette';
@@ -64,6 +64,7 @@ export class Renderer {
 
   private badgePaints = new Map<number, CanvasGradient>();
   private faces = new DecorCache();
+  private wardrobe: Wardrobe = {};
   private shadowPaint: CanvasGradient | null = null;
   private decor: {
     key: string;
@@ -78,6 +79,12 @@ export class Renderer {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D indisponible');
     this.ctx = ctx;
+  }
+
+  /** Les blocs se rhabillent : les têtes en cache sont périmées. */
+  setWardrobe(wardrobe: Wardrobe) {
+    this.wardrobe = wardrobe;
+    this.faces.clear();
   }
 
   resize(width: number, height: number) {
@@ -288,7 +295,7 @@ export class Renderer {
     paintBody(ctx, art, blockPaints(ctx, art, base, angle));
     paintSeams(ctx, art, angle);
     this.drawShine(art, b.pop);
-    drawCharacter(ctx, b.value, base, this.pose(b, scene), this.faces);
+    drawCharacter(ctx, b.value, base, this.pose(b, scene), this.faces, this.wardrobe);
     ctx.restore();
   }
 

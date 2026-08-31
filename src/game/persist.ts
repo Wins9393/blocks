@@ -1,6 +1,10 @@
+import { cleanWardrobe } from '../render/faces';
+import type { Wardrobe } from '../render/faces';
+
 const PREFS_KEY = 'blocks.prefs.v1';
 const SPACES_KEY = 'blocks.spaces.v1';
 const SCENE_PREFIX = 'blocks.scene.v2:';
+const LOOK_PREFIX = 'blocks.look.v1:';
 /** Sauvegarde d'avant les espaces : elle devient la scène du premier espace. */
 const LEGACY_SCENE_KEY = 'blocks.scene.v1';
 
@@ -135,7 +139,19 @@ export function saveScene(spaceId: string, scene: SavedScene) {
 
 export function dropScene(spaceId: string) {
   drop(sceneKey(spaceId));
+  drop(LOOK_PREFIX + spaceId);
   if (spaceId === DEFAULT_SPACE_ID) drop(LEGACY_SCENE_KEY);
+}
+
+// --- garde-robe -----------------------------------------------------------
+
+/** Ce que cet espace a changé à la tenue de ses blocs. */
+export function loadWardrobe(spaceId: string): Wardrobe {
+  return cleanWardrobe(read<unknown>(LOOK_PREFIX + spaceId));
+}
+
+export function saveWardrobe(spaceId: string, wardrobe: Wardrobe) {
+  write(LOOK_PREFIX + spaceId, wardrobe);
 }
 
 // --- préférences ----------------------------------------------------------

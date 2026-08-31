@@ -8,6 +8,7 @@ interface Props {
   state: GameState;
   muted: boolean;
   onOpenSpaces: () => void;
+  onWorkshop: () => void;
   onUndo: () => void;
   onClear: () => void;
   onToggleMute: () => void;
@@ -23,6 +24,7 @@ export default function TopBar({
   state,
   muted,
   onOpenSpaces,
+  onWorkshop,
   onUndo,
   onClear,
   onToggleMute,
@@ -51,6 +53,18 @@ export default function TopBar({
       </button>
 
       <div className="topbar-tools">
+        <button
+          className="icon-btn small"
+          onClick={onWorkshop}
+          aria-label="Atelier : habiller les blocs"
+          title="Atelier"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 20c0-2 1.4-3.2 3-3.2S10 18 10 20c0 .8-1 1.4-3 1.4S4 20.8 4 20z" />
+            <path d="M8.6 16.2 18.4 5.1a2 2 0 0 1 3 2.6L11 18" />
+          </svg>
+        </button>
+
         <button
           className="icon-btn small"
           onClick={onUndo}

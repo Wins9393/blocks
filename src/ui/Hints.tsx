@@ -1,6 +1,8 @@
+import type { Wardrobe } from '../render/faces';
 import BlockThumb from './BlockThumb';
 
 interface Props {
+  wardrobe: Wardrobe;
   onClose: () => void;
 }
 
@@ -22,7 +24,7 @@ const HINTS: Hint[] = [
  * Volontairement modale : un enfant balaie l'écran des qu'il s'allume, donc une
  * carte qui se ferme au premier contact disparaît avant d'avoir été lue.
  */
-export default function Hints({ onClose }: Props) {
+export default function Hints({ wardrobe, onClose }: Props) {
   return (
     <div className="hints">
       <div className="hints-card">
@@ -31,7 +33,7 @@ export default function Hints({ onClose }: Props) {
           {HINTS.map((h) => (
             <div className="hint" key={h.label}>
               {h.block ? (
-                <BlockThumb value={h.block} className="hint-chip" />
+                <BlockThumb value={h.block} wardrobe={wardrobe} className="hint-chip" />
               ) : (
                 <span className="hint-icon">{h.icon}</span>
               )}

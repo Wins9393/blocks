@@ -20,6 +20,7 @@ import { ShakeDetector, partitionByCut, segmentHitsBox, sliceFromPath } from '..
 import type { Cut, Sample } from '../input/gestures';
 import { World, minPartGap, rightingSpin } from '../physics/world';
 import type { Block } from '../physics/world';
+import type { Wardrobe } from '../render/faces';
 import { Renderer } from '../render/renderer';
 import type { BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
 import { loadScene, saveScene } from './persist';
@@ -262,6 +263,12 @@ export class Game {
     // Même vide : charger, c'est aussi vider la scène précédente.
     this.load(saved?.blocks ?? [], saved?.w);
     this.emit();
+  }
+
+  /** La tenue des blocs de cet espace. */
+  setWardrobe(wardrobe: Wardrobe) {
+    this.renderer.setWardrobe(wardrobe);
+    this.dirty = true;
   }
 
   /**

@@ -42,14 +42,26 @@ Les parties fixes du visage sont peintes une fois puis reposées en image : au
 trait, vingt visages coûtaient 2 ms par image, soit quatre fois le reste de la
 scène. Seuls le regard et les verres sont retracés à chaque tour.
 
+**Les têtes livrées ne sont que des réglages par défaut.** Chaque espace a sa
+garde-robe : yeux, sourcils, bouche, cheveux, chapeau, lunettes, moustache,
+joues et écharpe se choisissent bloc par bloc dans l'atelier. La couleur, elle,
+n'est pas réglable — c'est elle qui dit quel nombre on regarde, et deux blocs
+repeints à l'identique ne se distingueraient plus.
+
+La garde-robe ne garde que les écarts au réglage d'origine : reprendre la pièce
+livrée l'oublie, ce qui rend « remettre comme au début » exact et laisse les
+blocs jamais touchés suivre les évolutions du dessin. Régler le 10 rhabille du
+même coup tous les nombres de 11 à 20 — c'est la règle de la dizaine, et elle
+tient quel que soit le chapeau choisi.
+
 **Un bouton par bloc, dessiné par le même code que la scène.** La barre du bas
 montre les blocs de 1 à 10 avec leur silhouette réelle et leur personnage : le
 bouton montre exactement ce qu'il pose. Deux dessins séparés auraient divergé au
 premier changement de coiffure.
 
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre
-construction (`src/game/persist.ts`). Changer d'espace range la scène en cours
-sur son rayon avant de sortir l'autre.
+construction *et sa propre garde-robe* (`src/game/persist.ts`). Changer d'espace
+range la scène en cours sur son rayon avant de sortir l'autre.
 
 **Forme canonique plutôt qu'émergente.** Chaque nombre a une forme officielle
 (`src/core/shape.ts`) : le rectangle le plus carré possible, et pour un nombre
@@ -81,7 +93,7 @@ src/input/     reconnaissance de gestes (secousse, coupe) — pur, testé
 src/render/    canvas 2D
 src/audio/     synthèse sonore et voix
 src/game/      orchestration, boucle à pas fixe, sauvegarde
-src/ui/        React : barres, espaces et aide — rien de la scène
+src/ui/        React : barres, atelier, espaces et aide — rien de la scène
 ```
 
 React ne sert que pour l'habillage. La boucle de jeu vit en dehors de React et
