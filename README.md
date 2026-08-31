@@ -34,9 +34,9 @@ valeur (`src/render/faces.ts`) : le 3 porte une moustache, le 8 des lunettes
 rondes, le 10 une couronne. La couleur seule ne suffisait pas — deux teintes
 voisines se confondent de loin, et un enfant retient bien mieux « le moustachu »
 que « le jaune orangé ». Une règle traverse la série : **la couronne marque une
-dizaine.** De 11 à 19, le personnage garde la couronne du 10 et le visage de son
-unité — 13 a la moustache du 3, 18 les lunettes du 8 — et le 20 porte deux rangs.
-La décomposition se lit sur la tête.
+dizaine.** De 11 à 20, le personnage garde la couronne du 10 et le visage de son
+unité : 13 a la moustache du 3, 18 les lunettes du 8. La décomposition se lit
+sur la tête.
 
 Les parties fixes du visage sont peintes une fois puis reposées en image : au
 trait, vingt visages coûtaient 2 ms par image, soit quatre fois le reste de la

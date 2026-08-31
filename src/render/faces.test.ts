@@ -28,13 +28,6 @@ describe('lookFor', () => {
     }
   });
 
-  it('compte les dizaines en rangs de chapeau', () => {
-    expect(lookFor(9).tens).toBe(0);
-    expect(lookFor(10).tens).toBe(1);
-    expect(lookFor(17).tens).toBe(1);
-    expect(lookFor(20).tens).toBe(2);
-  });
-
   it('garde le visage de l unité au-dessus de dix', () => {
     // 13 porte la moustache du 3, 18 les lunettes du 8 : la décomposition se
     // lit sur la tête du personnage.
@@ -51,7 +44,6 @@ describe('lookFor', () => {
     expect(lookFor(13, wardrobe).hair).toBe('boucles');
     expect(lookFor(13, wardrobe).hat).toBe('bonnet');
     expect(lookFor(20, wardrobe).hat).toBe('bonnet');
-    expect(lookFor(20, wardrobe).tens).toBe(2);
   });
 
   it('laisse intactes les valeurs non réglées', () => {

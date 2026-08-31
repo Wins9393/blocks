@@ -14,8 +14,8 @@ import { centeredCells, shapeFor } from '../core/shape';
  * fixe, c'est elle qui identifie le nombre quoi qu'il arrive.
  *
  * Une règle traverse la série : ce que le 10 porte sur la tête marque une
- * dizaine. Les nombres de 11 à 19 le portent avec le visage de leur unité, et
- * le 20 en porte deux rangs. On lit la décomposition sur le personnage.
+ * dizaine. Les nombres de 11 à 20 le portent avec le visage de leur unité. On
+ * lit la décomposition sur le personnage.
  */
 
 const U = UNIT;
@@ -55,10 +55,8 @@ export type SlotKey = keyof Look;
 /** Ce qu'un espace a changé, pièce par pièce, pour les blocs de 1 à 10. */
 export type Wardrobe = Record<number, Partial<Look>>;
 
-export interface ResolvedLook extends Look {
-  /** Nombre de dizaines, donc de rangs de chapeau. */
-  tens: number;
-}
+/** Une tenue entièrement résolue : plus aucune pièce laissée au défaut. */
+export type ResolvedLook = Look;
 
 export interface Slot {
   key: SlotKey;
@@ -132,12 +130,9 @@ export function defaultLook(value: number): Look {
  */
 export function lookFor(value: number, wardrobe?: Wardrobe): ResolvedLook {
   const v = Math.min(MAX_VALUE, Math.max(1, Math.round(value)));
-  if (v <= 10) {
-    return { ...DEFAULTS[v], ...(wardrobe?.[v] ?? {}), tens: v === 10 ? 1 : 0 };
-  }
+  if (v <= 10) return { ...DEFAULTS[v], ...(wardrobe?.[v] ?? {}) };
   const unite = lookFor(v - 10, wardrobe);
-  const dix = lookFor(10, wardrobe);
-  return { ...unite, hat: dix.hat, tens: Math.floor(v / 10) };
+  return { ...unite, hat: lookFor(10, wardrobe).hat };
 }
 
 /** Ne garde d'une sauvegarde que des pièces qui existent encore. */
@@ -207,7 +202,7 @@ function inkFor(base: string): Ink {
 export function drawHeadDecor(ctx: CanvasRenderingContext2D, look: ResolvedLook, base: string) {
   const ink = inkFor(base);
   drawHair(ctx, look.hair, ink);
-  if (look.hat !== 'rien') drawHat(ctx, look.hat, ink, look.tens);
+  if (look.hat !== 'rien') hatPart(ctx, look.hat, ink);
   if (look.scarf !== 'rien') drawScarf(ctx, look.scarf, ink);
   if (look.cheeks === 'roses' || look.cheeks === 'deux') drawBlush(ctx);
   if (look.cheeks === 'taches' || look.cheeks === 'deux') drawFreckles(ctx, ink);
@@ -248,12 +243,12 @@ export function drawHead(
 // Boîte du décor, autour du centre de la case du visage. Assez large pour le
 // plus haut des chapeaux et la plus large des chevelures.
 const DECOR_HALF_W = U * 0.64;
-const DECOR_TOP = -U * 1.2;
+const DECOR_TOP = -U * 1.0;
 const DECOR_BOTTOM = U * 0.64;
 
 /** De quoi savoir si deux tenues donnent le même dessin. */
 export function lookSignature(look: ResolvedLook): string {
-  return SLOTS.map((s) => look[s.key]).join('.') + `.${look.tens}`;
+  return SLOTS.map((s) => look[s.key]).join('.');
 }
 
 /**
@@ -604,19 +599,6 @@ function drawHair(ctx: CanvasRenderingContext2D, kind: HairKind, ink: Ink) {
 }
 
 // --- chapeaux -------------------------------------------------------------
-
-/** Un rang par dizaine : on compte les dix sur la tête. */
-function drawHat(ctx: CanvasRenderingContext2D, kind: HatKind, ink: Ink, tens: number) {
-  const rangs = Math.max(1, Math.min(2, tens));
-  // Du plus haut vers le plus bas : le rang du dessous recouvre la base de
-  // celui du dessus, ce qui les fait tenir ensemble.
-  for (let i = rangs - 1; i >= 0; i--) {
-    ctx.save();
-    ctx.translate(0, -i * U * 0.22);
-    hatPart(ctx, kind, ink);
-    ctx.restore();
-  }
-}
 
 function hatPart(ctx: CanvasRenderingContext2D, kind: HatKind, ink: Ink) {
   switch (kind) {
