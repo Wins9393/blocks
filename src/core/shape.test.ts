@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPrime, shapeFor } from './shape';
+import { isPrime, rectanglesFor, shapeFor } from './shape';
 import { MAX_VALUE } from './constants';
 
 describe('shapeFor', () => {
@@ -64,6 +64,46 @@ describe('shapeFor', () => {
       const face = s.cells[s.faceIndex];
       const minY = Math.min(...s.cells.map((c) => c.y));
       expect(face.y).toBe(minY);
+    }
+  });
+});
+
+describe('rectanglesFor', () => {
+  it('pave exactement la forme, sans trou ni recouvrement', () => {
+    for (let n = 1; n <= 60; n++) {
+      const shape = shapeFor(n);
+      const couverture = new Map<string, number>();
+      for (const r of rectanglesFor(n)) {
+        // Retour aux coordonnées entières de la grille.
+        const x0 = r.x - (r.w - 1) / 2 + (shape.w - 1) / 2;
+        const y0 = r.y - (r.h - 1) / 2 + (shape.h - 1) / 2;
+        expect(Number.isInteger(x0)).toBe(true);
+        expect(Number.isInteger(y0)).toBe(true);
+        for (let j = 0; j < r.h; j++) {
+          for (let i = 0; i < r.w; i++) {
+            const k = `${x0 + i},${y0 + j}`;
+            couverture.set(k, (couverture.get(k) ?? 0) + 1);
+          }
+        }
+      }
+      const attendu = new Set(shape.cells.map((c) => `${c.x},${c.y}`));
+      expect(couverture.size).toBe(n);
+      for (const [k, fois] of couverture) {
+        expect(attendu.has(k)).toBe(true);
+        expect(fois).toBe(1);
+      }
+    }
+  });
+
+  it('reste très économe : une ou deux pièces pour toutes les formes jouables', () => {
+    for (let n = 1; n <= MAX_VALUE; n++) {
+      expect(rectanglesFor(n).length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('donne une seule pièce aux rectangles pleins', () => {
+    for (const n of [1, 2, 3, 4, 6, 8, 9, 10, 12, 16, 20]) {
+      expect(rectanglesFor(n)).toHaveLength(1);
     }
   });
 });

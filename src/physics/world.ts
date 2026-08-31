@@ -1,6 +1,6 @@
 import Matter from 'matter-js';
 import { GRAVITY_Y, TRASH_W, UNIT } from '../core/constants';
-import { cellOffset, shapeFor } from '../core/shape';
+import { rectanglesFor, shapeFor } from '../core/shape';
 import type { Shape } from '../core/shape';
 
 const { Bodies, Body, Composite, Engine, Query, Sleeping } = Matter;
@@ -25,12 +25,10 @@ let nextId = 1;
  * et gratuit. Fusionner et séparer reviennent alors à détruire puis recréer.
  */
 function buildBody(value: number, x: number, y: number, angle: number): Matter.Body {
-  const shape = shapeFor(value);
   const material = { friction: 0.42, frictionStatic: 0.7, restitution: 0.05 };
-  const parts = shape.cells.map((cell) => {
-    const o = cellOffset(shape, cell);
-    return Bodies.rectangle(x + o.x * UNIT, y + o.y * UNIT, UNIT, UNIT, material);
-  });
+  const parts = rectanglesFor(value).map((r) =>
+    Bodies.rectangle(x + r.x * UNIT, y + r.y * UNIT, r.w * UNIT, r.h * UNIT, material),
+  );
   const body = Body.create({ ...material, parts, frictionAir: 0.014, slop: 0.04 });
   Body.setPosition(body, { x, y });
   Body.setAngle(body, angle);
@@ -157,18 +155,62 @@ export class World {
   }
 }
 
-/** Plus petit écart entre deux cubes appartenant à deux blocs différents. */
+/**
+ * Plus petit écart réel entre les formes de collision de deux blocs.
+ *
+ * Mesuré arête contre arête, pas boîte contre boîte : une pièce de plusieurs
+ * cubes inclinée a une boîte englobante bien plus large qu'elle, et la fusion
+ * se proposerait alors que les blocs sont encore visiblement séparés.
+ */
 export function minPartGap(a: Matter.Body, b: Matter.Body): number {
   let best = Infinity;
   for (let i = 1; i < a.parts.length; i++) {
-    const pa = a.parts[i].bounds;
+    const va = a.parts[i].vertices;
     for (let j = 1; j < b.parts.length; j++) {
-      const pb = b.parts[j].bounds;
-      const dx = Math.max(pa.min.x - pb.max.x, pb.min.x - pa.max.x, 0);
-      const dy = Math.max(pa.min.y - pb.max.y, pb.min.y - pa.max.y, 0);
-      best = Math.min(best, Math.hypot(dx, dy));
-      if (best === 0) return 0;
+      const vb = b.parts[j].vertices;
+      for (let m = 0; m < va.length; m++) {
+        const a1 = va[m];
+        const a2 = va[(m + 1) % va.length];
+        for (let n = 0; n < vb.length; n++) {
+          const b1 = vb[n];
+          const b2 = vb[(n + 1) % vb.length];
+          best = Math.min(best, segmentGap(a1, a2, b1, b2));
+          if (best === 0) return 0;
+        }
+      }
     }
   }
   return best;
+}
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+function pointSegmentGap(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+function segmentGap(a1: Point, a2: Point, b1: Point, b2: Point): number {
+  const d1x = a2.x - a1.x;
+  const d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x;
+  const d2y = b2.y - b1.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (denom !== 0) {
+    const s = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / denom;
+    const t = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / denom;
+    if (s >= 0 && s <= 1 && t >= 0 && t <= 1) return 0; // les segments se croisent
+  }
+  return Math.min(
+    pointSegmentGap(a1, b1, b2),
+    pointSegmentGap(a2, b1, b2),
+    pointSegmentGap(b1, a1, a2),
+    pointSegmentGap(b2, a1, a2),
+  );
 }

@@ -123,3 +123,89 @@ export function centeredCells(value: number): Cell[] {
   centeredCache.set(n, centered);
   return centered;
 }
+
+export interface Rect {
+  /** Centre du rectangle, en cubes, relatif au centre de la boîte englobante. */
+  x: number;
+  y: number;
+  /** Dimensions, en cubes. */
+  w: number;
+  h: number;
+}
+
+const rectCache = new Map<number, Rect[]>();
+
+/**
+ * Pave la forme avec le moins de rectangles possible (glouton : on étend vers
+ * la droite, puis vers le bas tant que toute la largeur suit).
+ *
+ * C'est la forme de collision, pas la forme dessinée. Un cube par cellule
+ * paraît naturel mais produit des contacts redondants le long de chaque arête
+ * partagée : le solveur sur-corrige, le bloc se soulève de quelques pixels à
+ * chaque pas, et une tour finit par osciller puis basculer toute seule. Avec
+ * ce pavage, toutes les formes canoniques tiennent en un ou deux rectangles.
+ */
+function tile(shape: Shape, colonneDabord: boolean): Rect[] {
+  const key = (x: number, y: number) => `${x},${y}`;
+  const filled = new Set(shape.cells.map((c) => key(c.x, c.y)));
+  const used = new Set<string>();
+  const free = (x: number, y: number) => filled.has(key(x, y)) && !used.has(key(x, y));
+
+  // On raisonne dans un repère (a, b) : a est l'axe qu'on étend en premier.
+  const spanA = colonneDabord ? shape.h : shape.w;
+  const spanB = colonneDabord ? shape.w : shape.h;
+  const at = (a: number, b: number) => (colonneDabord ? free(b, a) : free(a, b));
+
+  const rects: Rect[] = [];
+  for (let b = 0; b < spanB; b++) {
+    for (let a = 0; a < spanA; a++) {
+      if (!at(a, b)) continue;
+
+      let da = 1;
+      while (a + da < spanA && at(a + da, b)) da++;
+
+      let db = 1;
+      while (b + db < spanB) {
+        let full = true;
+        for (let i = 0; i < da && full; i++) full = at(a + i, b + db);
+        if (!full) break;
+        db++;
+      }
+
+      for (let j = 0; j < db; j++) {
+        for (let i = 0; i < da; i++) {
+          used.add(colonneDabord ? key(b + j, a + i) : key(a + i, b + j));
+        }
+      }
+
+      const x0 = colonneDabord ? b : a;
+      const y0 = colonneDabord ? a : b;
+      const w = colonneDabord ? db : da;
+      const h = colonneDabord ? da : db;
+      rects.push({
+        x: x0 + (w - 1) / 2 - (shape.w - 1) / 2,
+        y: y0 + (h - 1) / 2 - (shape.h - 1) / 2,
+        w,
+        h,
+      });
+    }
+  }
+  return rects;
+}
+
+export function rectanglesFor(value: number): Rect[] {
+  const n = Math.max(1, Math.floor(value));
+  const hit = rectCache.get(n);
+  if (hit) return hit;
+
+  const shape = shapeFor(n);
+  // Les deux sens ne donnent pas le même découpage : en ligne d'abord, une base
+  // large surmontée d'une bosse part en tranches verticales. On garde le plus
+  // économe — moins il y a de pièces, plus le contact avec le sol est propre.
+  const lignes = tile(shape, false);
+  const colonnes = tile(shape, true);
+  const rects = colonnes.length < lignes.length ? colonnes : lignes;
+
+  rectCache.set(n, rects);
+  return rects;
+}

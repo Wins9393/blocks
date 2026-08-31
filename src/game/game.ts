@@ -139,6 +139,10 @@ export class Game {
   private handleResize = () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    // Onglet masqué ou panneau replié : la fenêtre peut mesurer zéro. Rebâtir
+    // les murs sur ces valeurs les ferait sortir de l'écran et la scène
+    // tomberait dans le vide.
+    if (w < 2 || h < 2) return;
     this.renderer.resize(w, h);
     this.world.resize(w, h, BOTTOM_SAFE);
   };
@@ -500,11 +504,9 @@ export class Game {
 
     let cutSomething = false;
     for (const block of victims) {
-      const parts = block.body.parts.slice(1);
-      const [plus, minus] = partitionByCut(
-        cut,
-        parts.map((p) => ({ x: p.position.x, y: p.position.y })),
-      );
+      // On répartit les cubes, pas les parties du corps : depuis que la forme
+      // de collision est pavée de rectangles, une partie vaut plusieurs cubes.
+      const [plus, minus] = partitionByCut(cut, cubePositions(block));
       if (plus.length === 0 || minus.length === 0) continue;
 
       if (!cutSomething) {
@@ -556,13 +558,7 @@ export class Game {
 
   private burst(block: Block, perCube: number, target?: { x: number; y: number }) {
     const color = colorFor(block.value);
-    for (const cell of centeredCells(block.value)) {
-      const cos = Math.cos(block.body.angle);
-      const sin = Math.sin(block.body.angle);
-      const ox = cell.x * UNIT;
-      const oy = cell.y * UNIT;
-      const x = block.body.position.x + ox * cos - oy * sin;
-      const y = block.body.position.y + ox * sin + oy * cos;
+    for (const { x, y } of cubePositions(block)) {
       for (let i = 0; i < perCube; i++) {
         this.particles.push({
           x,
@@ -777,6 +773,20 @@ export class Game {
       time: this.time,
     };
   }
+}
+
+/** Position monde du centre de chaque cube d'un bloc, rotation comprise. */
+function cubePositions(block: Block): Array<{ x: number; y: number }> {
+  const cos = Math.cos(block.body.angle);
+  const sin = Math.sin(block.body.angle);
+  return centeredCells(block.value).map((cell) => {
+    const ox = cell.x * UNIT;
+    const oy = cell.y * UNIT;
+    return {
+      x: block.body.position.x + ox * cos - oy * sin,
+      y: block.body.position.y + ox * sin + oy * cos,
+    };
+  });
 }
 
 function clamp(v: number, lo: number, hi: number): number {
