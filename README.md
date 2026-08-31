@@ -1,0 +1,84 @@
+# Blocks
+
+Un bac à sable physique pour fabriquer, casser et recomposer les nombres.
+Chaque nombre est un personnage fait de `n` cubes : on les colle pour additionner,
+on les secoue ou on les tranche pour décomposer.
+
+## Lancer
+
+```bash
+npm install && npm run dev
+```
+
+`npm test` pour les tests unitaires, `npm run build` pour la PWA de production.
+
+## Les quatre gestes
+
+| Geste | Effet |
+| --- | --- |
+| Bouton **+1** | fait tomber un cube de plus |
+| Glisser un bloc contre un autre, puis lâcher | fusion — un aperçu montre `3 + 4 = 7` avant de valider |
+| Tenir un bloc et le **secouer** | détache une unité à chaque secousse |
+| Tracer un **trait franc** à travers un bloc | le coupe en deux là où le trait passe |
+| Lâcher un bloc dans la **corbeille** | le supprime (annulable) |
+
+## Décisions de conception
+
+**La fusion exige une intention.** Avec de la gravité, tout finit par se toucher :
+si le contact suffisait, l'écran fusionnerait tout seul en un bloc géant. La fusion
+n'a donc lieu qu'au *relâché* d'un glisser qui a réellement parcouru du chemin
+(`MERGE_MIN_TRAVEL`) — ni le contact passif, ni un simple tap ne fusionnent.
+
+**Forme canonique plutôt qu'émergente.** Chaque nombre a une forme officielle
+(`src/core/shape.ts`) : le rectangle le plus carré possible, et pour un nombre
+premier ≥ 5, le rectangle de `n − 1` surmonté d'un cube. Fusionner devient une
+addition, découper devient un comptage — aucune géométrie à réconcilier.
+Effet de bord : les nombres premiers sont les seuls à porter une bosse, donc
+l'enfant voit la primalité avant qu'on la lui nomme.
+
+**Pas d'appui long.** L'appui long entre en conflit avec le début d'un glisser et
+rate une fois sur deux chez un jeune enfant. Le bloc est déjà tenu quand on le
+déplace : *tenir + secouer* suffit, sans mode à armer.
+
+**Un bloc = un corps rigide composé**, pas une chaîne de contraintes de soudure
+(molles et coûteuses). Séparer revient à détruire un corps et à en créer deux.
+
+**Glisser cinématique**, pas de `MouseConstraint` : un correcteur proportionnel
+impose la vitesse à chaque pas, ce qui garde des collisions correctes sans
+l'élasticité molle du ressort de Matter.
+
+**Zéro asset.** Sons synthétisés à la volée (Web Audio) et voix via l'API de
+synthèse du navigateur, en français. La PWA pèse ~100 ko compressés.
+
+## Architecture
+
+```
+src/core/      formes canoniques, palette, constantes — pur, testé, sans dépendance
+src/physics/   adaptateur Matter.js : forme → corps composé
+src/input/     reconnaissance de gestes (secousse, coupe) — pur, testé
+src/render/    canvas 2D
+src/audio/     synthèse sonore et voix
+src/game/      orchestration, boucle à pas fixe, sauvegarde
+src/ui/        React : uniquement la barre d'outils et l'aide
+```
+
+React ne sert que pour l'habillage. La boucle de jeu vit en dehors de React et
+pilote le canvas directement.
+
+## Réglages utiles
+
+`src/core/constants.ts` — `MAX_VALUE` (20) plafonne la taille d'un bloc,
+`MAX_UNITS` (150) le total à l'écran, `UNIT` (36 px) la taille d'un cube.
+
+## Licence et inspiration
+
+Le concept « un nombre est fait de n cubes » vient du matériel Cuisenaire et des
+blocs de Dienes, dans le domaine public depuis des décennies. Ce projet n'utilise
+ni les personnages, ni les noms, ni la palette d'aucune œuvre sous licence :
+couleurs propres, visages minimalistes, nom original.
+
+## Suite
+
+- Mode défi (« fabrique un 7 ! »), collection des formes découvertes.
+- Multiplication par rectangles (la forme canonique s'y prête déjà).
+- Soudure telle quelle + geste « ranger » qui claque la forme canonique.
