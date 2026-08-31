@@ -8,8 +8,17 @@ import type { BlockArt } from './silhouette';
 
 const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -apple-system, sans-serif";
 
-/** La lumière vient d'en haut à gauche. Tout l'ombrage en découle. */
-const LIGHT = { x: -0.26, y: -0.34 };
+/**
+ * Direction du soleil, en repère MONDE et normalisée : elle pointe vers la
+ * source. Tout l'ombrage en découle, et surtout : elle ne tourne pas avec les
+ * blocs. C'est ce qui distingue un objet éclairé d'un autocollant.
+ */
+const LIGHT = { x: -0.42, y: -0.91 };
+
+/** Épaisseur apparente : fuite horizontale par rapport au centre, et chute. */
+const DEPTH_SIDE = 0.05;
+const DEPTH_SIDE_MAX = 8;
+const DEPTH_DROP = 5.5;
 
 export interface BlockVisual {
   id: number;
@@ -59,21 +68,10 @@ export interface Scene {
   time: number;
 }
 
-interface Paints {
-  body: CanvasGradient;
-  rim: CanvasGradient;
-}
-
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private dpr = 1;
 
-  /**
-   * Les dégradés sont construits dans le repère local du bloc, donc valables
-   * pour tous les blocs de même valeur : on les garde plutôt que d'en allouer
-   * deux par bloc et par image.
-   */
-  private paints = new Map<number, Paints>();
   private badgePaints = new Map<number, CanvasGradient>();
   private shadowPaint: CanvasGradient | null = null;
   private decor: {
@@ -250,7 +248,8 @@ export class Renderer {
     const spread = (bounds.max.x - bounds.min.x) * (0.52 + (1 - fade) * 0.5);
     ctx.save();
     ctx.globalAlpha = 0.36 + fade * 0.5;
-    ctx.translate(b.body.position.x + dist * LIGHT.x * 0.14, groundY + 4);
+    // L'ombre fuit la lumière, elle ne la suit pas.
+    ctx.translate(b.body.position.x - dist * LIGHT.x * 0.16, groundY + 4);
     ctx.scale(spread, 11 + (1 - fade) * 7);
     ctx.fillStyle = this.shadowPaint;
     ctx.beginPath();
@@ -261,34 +260,47 @@ export class Renderer {
 
   // --- blocs --------------------------------------------------------------
 
-  private blockPaints(value: number, art: BlockArt): Paints {
-    const hit = this.paints.get(value);
-    if (hit) return hit;
+  /** La lumière du monde, exprimée dans le repère tourné du bloc. */
+  private localLight(angle: number) {
+    const cos = Math.cos(-angle);
+    const sin = Math.sin(-angle);
+    return {
+      x: LIGHT.x * cos - LIGHT.y * sin,
+      y: LIGHT.x * sin + LIGHT.y * cos,
+    };
+  }
+
+  /**
+   * Corps et liseré. Ils dépendent de l'orientation, donc ils ne peuvent plus
+   * être mis en cache par valeur : c'est le prix d'une lumière qui reste en
+   * place quand le bloc bascule.
+   */
+  private blockPaints(art: BlockArt, base: string, angle: number) {
     const { ctx } = this;
-    const base = colorFor(value);
     const w = art.right - art.left;
     const h = art.bottom - art.top;
+    const mx = (art.left + art.right) / 2;
+    const my = (art.top + art.bottom) / 2;
+    const l = this.localLight(angle);
 
-    // Éclairage doux venu du haut à gauche, en couleurs opaques : deux couches
-    // translucides se cumuleraient dans leur recouvrement et trahiraient le
-    // contour par une bande plus sombre.
-    const cx = (art.left + art.right) / 2 + w * LIGHT.x;
-    const cy = art.top + h * 0.16;
-    const body = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.hypot(w, h) * 0.92);
-    body.addColorStop(0, shade(base, 0.34));
-    body.addColorStop(0.32, shade(base, 0.14));
-    body.addColorStop(0.66, base);
-    body.addColorStop(1, shade(base, -0.28));
+    const fx = mx + l.x * w * 0.46;
+    const fy = my + l.y * h * 0.46;
+    const body = ctx.createRadialGradient(fx, fy, 0, fx, fy, Math.hypot(w, h) * 0.96);
+    body.addColorStop(0, shade(base, 0.36));
+    body.addColorStop(0.3, shade(base, 0.15));
+    body.addColorStop(0.62, base);
+    body.addColorStop(1, shade(base, -0.3));
 
-    // Le liseré capte la lumière en haut et s'enfonce vers le bas.
-    const rim = ctx.createLinearGradient(0, art.top, 0, art.bottom);
-    rim.addColorStop(0, shade(base, -0.2));
-    rim.addColorStop(0.5, shade(base, -0.42));
-    rim.addColorStop(1, shade(base, -0.56));
+    const rim = ctx.createLinearGradient(
+      mx + l.x * w * 0.5,
+      my + l.y * h * 0.5,
+      mx - l.x * w * 0.5,
+      my - l.y * h * 0.5,
+    );
+    rim.addColorStop(0, shade(base, -0.14));
+    rim.addColorStop(1, shade(base, -0.58));
 
-    const paints = { body, rim };
-    this.paints.set(value, paints);
-    return paints;
+    return { body, rim };
   }
 
   private drawBlock(b: BlockVisual, scene: Scene) {
@@ -301,17 +313,39 @@ export class Renderer {
     const sx = scale * (1 + sq * 0.22);
     const sy = scale * (1 - sq * 0.22);
     const jitter = b.shake * 4;
+    const angle = b.body.angle;
 
     const art = blockArt(b.value);
-    const paints = this.blockPaints(b.value, art);
+    const paints = this.blockPaints(art, base, angle);
     const pen = 2 * CORNER;
 
-    ctx.save();
-    ctx.translate(
-      b.body.position.x + (jitter ? (Math.random() - 0.5) * jitter : 0),
-      b.body.position.y + (jitter ? (Math.random() - 0.5) * jitter : 0),
+    const px = b.body.position.x + (jitter ? (Math.random() - 0.5) * jitter : 0);
+    const py = b.body.position.y + (jitter ? (Math.random() - 0.5) * jitter : 0);
+
+    // Épaisseur : la même silhouette, décalée et assombrie, posée dessous.
+    // Le décalage est en repère monde et fuit le centre de l'écran, comme si
+    // une seule caméra regardait toute la scène.
+    const side = clamp(
+      (px - scene.width / 2) * DEPTH_SIDE,
+      -DEPTH_SIDE_MAX,
+      DEPTH_SIDE_MAX,
     );
-    ctx.rotate(b.body.angle);
+    ctx.save();
+    ctx.translate(px + side, py + DEPTH_DROP);
+    ctx.rotate(angle);
+    ctx.scale(sx, sy);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = pen + 3.4;
+    ctx.strokeStyle = shade(base, -0.64);
+    ctx.fillStyle = shade(base, -0.64);
+    ctx.stroke(art.path);
+    ctx.fill(art.path);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
     ctx.scale(sx, sy);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -339,41 +373,57 @@ export class Renderer {
     ctx.stroke(art.path);
     ctx.fill(art.path);
 
-    this.drawFacets(art);
-    this.drawSeams(art);
+    this.drawEdges(art, angle);
+    this.drawSeams(art, angle);
+    this.drawShine(art, b.pop);
     this.drawEyes(b, base, scene);
     ctx.restore();
   }
 
-  /** Reflet des faces tournées vers le ciel. */
-  private drawFacets(art: BlockArt) {
+  /**
+   * Arêtes du contour : celles tournées vers la lumière s'allument, celles qui
+   * lui tournent le dos s'assombrissent. Quand un bloc se couche, le reflet
+   * passe tout seul du dessus au flanc.
+   */
+  private drawEdges(art: BlockArt, angle: number) {
     const { ctx } = this;
-    for (const [x, y, w, h] of art.highlights) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    for (const e of art.edges) {
+      const nx = e.nx * cos - e.ny * sin;
+      const ny = e.nx * sin + e.ny * cos;
+      const face = nx * LIGHT.x + ny * LIGHT.y;
+      if (Math.abs(face) < 0.06) continue;
+
+      const force = Math.pow(Math.abs(face), 1.3);
+      ctx.fillStyle =
+        face > 0
+          ? `rgba(255, 255, 255, ${(0.36 * force).toFixed(3)})`
+          : `rgba(8, 11, 18, ${(0.24 * force).toFixed(3)})`;
       ctx.beginPath();
-      ctx.roundRect(x, y, w, h, h / 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.beginPath();
-      ctx.roundRect(x + h * 0.6, y + h * 1.5, w - h * 1.2, h * 0.7, h * 0.35);
+      ctx.roundRect(e.x, e.y, e.w, e.h, Math.min(e.w, e.h) / 2);
       ctx.fill();
     }
   }
 
   /**
-   * Rainures entre cubes : un trait sombre, doublé d'un trait clair du côté
-   * opposé à la lumière. C'est ce couple qui les fait lire comme creusées et
-   * non comme dessinées.
+   * Rainures entre cubes : un trait sombre, doublé d'un trait clair sur la
+   * paroi qui fait face à la lumière. C'est ce couple qui les fait lire comme
+   * creusées et non comme dessinées.
    */
-  private drawSeams(art: BlockArt) {
+  private drawSeams(art: BlockArt, angle: number) {
     const { ctx } = this;
+    const l = this.localLight(angle);
+
     for (const [x1, y1, x2, y2] of art.seams) {
       const horizontale = y1 === y2;
-      const ox = horizontale ? 0 : 1.5;
-      const oy = horizontale ? 1.5 : 0;
+      const nx = horizontale ? 0 : 1;
+      const ny = horizontale ? 1 : 0;
+      const cote = nx * l.x + ny * l.y >= 0 ? -1.5 : 1.5;
 
       ctx.lineWidth = 1.7;
-      ctx.strokeStyle = 'rgba(12, 16, 26, 0.2)';
+      ctx.strokeStyle = 'rgba(12, 16, 26, 0.22)';
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
@@ -382,10 +432,33 @@ export class Renderer {
       ctx.lineWidth = 1.3;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.17)';
       ctx.beginPath();
-      ctx.moveTo(x1 + ox, y1 + oy);
-      ctx.lineTo(x2 + ox, y2 + oy);
+      ctx.moveTo(x1 + nx * cote, y1 + ny * cote);
+      ctx.lineTo(x2 + nx * cote, y2 + ny * cote);
       ctx.stroke();
     }
+  }
+
+  /** Balayage de lumière sur un bloc qui vient d'apparaître ou de fusionner. */
+  private drawShine(art: BlockArt, pop: number) {
+    if (pop <= 0.02) return;
+    const { ctx } = this;
+    const t = 1 - pop;
+    const w = art.right - art.left;
+    const h = art.bottom - art.top;
+    const course = w + h;
+    const tete = art.left - course * 0.3 + t * course * 1.6;
+    const largeur = Math.max(16, course * 0.1);
+
+    const band = ctx.createLinearGradient(tete - largeur, art.top, tete + largeur, art.bottom);
+    band.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    band.addColorStop(0.5, `rgba(255, 255, 255, ${(0.3 * Math.sin(Math.PI * t)).toFixed(3)})`);
+    band.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.save();
+    ctx.clip(art.clip);
+    ctx.fillStyle = band;
+    ctx.fillRect(art.left - 4, art.top - 4, w + 8, h + 8);
+    ctx.restore();
   }
 
   private drawEyes(b: BlockVisual, base: string, scene: Scene) {
@@ -653,6 +726,10 @@ export class Renderer {
     ctx.stroke();
     ctx.restore();
   }
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }
 
 function easeOutBack(t: number): number {
