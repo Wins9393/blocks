@@ -1,3 +1,5 @@
+import BlockThumb from './BlockThumb';
+
 interface Props {
   onClose: () => void;
 }
@@ -6,11 +8,11 @@ interface Hint {
   label: string;
   icon?: string;
   /** Réplique miniature d'un bouton, plus parlante qu'un pictogramme. */
-  chip?: string;
+  block?: number;
 }
 
 const HINTS: Hint[] = [
-  { chip: '+1', label: 'Appuie sur +1' },
+  { block: 3, label: 'Choisis un bloc en bas' },
   { icon: '\u{1F91D}', label: 'Colle deux blocs' },
   { icon: '\u{1F91A}', label: 'Secoue pour détacher' },
   { icon: '✂️', label: 'Trace un trait pour couper' },
@@ -28,8 +30,8 @@ export default function Hints({ onClose }: Props) {
         <div className="hints-grid">
           {HINTS.map((h) => (
             <div className="hint" key={h.label}>
-              {h.chip ? (
-                <span className="hint-chip">{h.chip}</span>
+              {h.block ? (
+                <BlockThumb value={h.block} className="hint-chip" />
               ) : (
                 <span className="hint-icon">{h.icon}</span>
               )}

@@ -79,7 +79,10 @@ export class Game {
   private saveAt = 0;
   private listeners = new Set<(s: GameState) => void>();
 
-  constructor(private canvas: HTMLCanvasElement) {
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private spaceId: string,
+  ) {
     this.renderer = new Renderer(canvas);
   }
 
@@ -177,17 +180,22 @@ export class Game {
 
   // --- actions publiques ------------------------------------------------
 
-  spawnOne() {
-    if (this.world.totalUnits >= MAX_UNITS) {
+  /** Pose un bloc de la valeur demandée, tombé du haut de l'écran. */
+  spawn(value: number) {
+    const v = Math.min(MAX_VALUE, Math.max(1, Math.round(value)));
+    if (this.world.totalUnits + v > MAX_UNITS) {
       sfx.playRefuse();
       return;
     }
     this.snapshot();
     const x = this.world.width * 0.5 + (Math.random() - 0.5) * Math.min(220, this.world.width * 0.5);
-    const block = this.world.add(1, x, 70, (Math.random() - 0.5) * 0.6);
+    // Un grand bloc lâché trop haut naît la tête hors de l'écran : on descend
+    // le point de chute d'autant que le bloc est haut.
+    const y = 40 + (shapeFor(v).h * UNIT) / 2;
+    const block = this.world.add(v, x, y, (Math.random() - 0.5) * 0.6);
     Body.setVelocity(block.body, { x: (Math.random() - 0.5) * 3, y: 2 });
     this.track(block);
-    sfx.playSpawn(1);
+    sfx.playSpawn(v);
     this.dirty = true;
     this.emit();
   }
@@ -232,7 +240,7 @@ export class Game {
    * `savedWidth` sert à remettre la scène à l'échelle : sans ça, une scène
    * enregistrée sur un grand écran revient toute empilée sur un petit.
    */
-  private load(saved: SavedBlock[], savedWidth = this.world.width) {
+  private load(saved: SavedBlock[], savedWidth: number = this.world.width) {
     this.world.clear();
     this.visuals.clear();
     this.drags.clear();
@@ -250,9 +258,23 @@ export class Game {
   }
 
   private restore() {
-    const saved = loadScene();
-    if (saved) this.load(saved.blocks, saved.w);
+    const saved = loadScene(this.spaceId);
+    // Même vide : charger, c'est aussi vider la scène précédente.
+    this.load(saved?.blocks ?? [], saved?.w);
     this.emit();
+  }
+
+  /**
+   * Passe à l'espace d'un autre enfant. La scène en cours part d'abord sur
+   * son propre rayon, sinon elle finirait chez le suivant.
+   */
+  useSpace(id: string) {
+    if (id === this.spaceId) return;
+    this.flush();
+    this.spaceId = id;
+    this.undoStack.length = 0;
+    this.particles.length = 0;
+    this.restore();
   }
 
   private snapshot() {
@@ -261,7 +283,7 @@ export class Game {
   }
 
   private flush = () => {
-    saveScene({ w: this.world.width, blocks: this.serialize() });
+    saveScene(this.spaceId, { w: this.world.width, blocks: this.serialize() });
     this.dirty = false;
   };
 

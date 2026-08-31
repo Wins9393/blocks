@@ -1,22 +1,14 @@
 import type Matter from 'matter-js';
 import { GROUND_HEIGHT, UNIT } from '../core/constants';
 import { colorFor, rgba, shade } from '../core/palette';
-import { centeredCells, shapeFor } from '../core/shape';
 import type { Sample } from '../input/gestures';
+import { DecorCache, drawCharacter } from './faces';
+import type { Pose } from './faces';
+import { LIGHT, PEN, blockPaints, paintBody, paintSeams } from './paint';
 import { CORNER, blockArt } from './silhouette';
 import type { BlockArt } from './silhouette';
 
 const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -apple-system, sans-serif";
-
-/**
- * Direction du soleil, en repère MONDE et normalisée : elle pointe vers la
- * source. Tout l'ombrage en découle, et surtout : elle ne tourne pas avec les
- * blocs. C'est ce qui distingue un objet éclairé d'un autocollant.
- */
-const LIGHT = { x: -0.6, y: -0.8 };
-
-/** Largeur du biseau qui court le long du contour, en pixels. */
-const BEVEL = 3.6;
 
 export interface BlockVisual {
   id: number;
@@ -71,6 +63,7 @@ export class Renderer {
   private dpr = 1;
 
   private badgePaints = new Map<number, CanvasGradient>();
+  private faces = new DecorCache();
   private shadowPaint: CanvasGradient | null = null;
   private decor: {
     key: string;
@@ -89,6 +82,7 @@ export class Renderer {
 
   resize(width: number, height: number) {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.faces.setDpr(this.dpr);
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
     this.canvas.style.width = `${width}px`;
@@ -258,63 +252,6 @@ export class Renderer {
 
   // --- blocs --------------------------------------------------------------
 
-  /** La lumière du monde, exprimée dans le repère tourné du bloc. */
-  private localLight(angle: number) {
-    const cos = Math.cos(-angle);
-    const sin = Math.sin(-angle);
-    return {
-      x: LIGHT.x * cos - LIGHT.y * sin,
-      y: LIGHT.x * sin + LIGHT.y * cos,
-    };
-  }
-
-  /**
-   * Corps et liseré. Ils dépendent de l'orientation, donc ils ne peuvent plus
-   * être mis en cache par valeur : c'est le prix d'une lumière qui reste en
-   * place quand le bloc bascule.
-   */
-  private blockPaints(art: BlockArt, base: string, angle: number) {
-    const { ctx } = this;
-    const w = art.right - art.left;
-    const h = art.bottom - art.top;
-    const mx = (art.left + art.right) / 2;
-    const my = (art.top + art.bottom) / 2;
-    const l = this.localLight(angle);
-
-    const fx = mx + l.x * w * 0.46;
-    const fy = my + l.y * h * 0.46;
-    const body = ctx.createRadialGradient(fx, fy, 0, fx, fy, Math.hypot(w, h) * 0.96);
-    body.addColorStop(0, shade(base, 0.36));
-    body.addColorStop(0.3, shade(base, 0.15));
-    body.addColorStop(0.62, base);
-    body.addColorStop(1, shade(base, -0.3));
-
-    const axe = (from: number, to: number): CanvasGradient =>
-      ctx.createLinearGradient(
-        mx + l.x * w * from,
-        my + l.y * h * from,
-        mx - l.x * w * to,
-        my - l.y * h * to,
-      );
-
-    // Le liseré détache le bloc du fond. Il reste plus sombre du côté opposé
-    // à la lumière, mais assez discret pour ne pas se lire comme une tranche.
-    const rim = axe(0.5, 0.5);
-    rim.addColorStop(0, shade(base, -0.04));
-    rim.addColorStop(1, shade(base, -0.4));
-
-    // Le biseau : il épouse tout le contour, clair du côté de la lumière,
-    // sombre à l'opposé. Des baguettes posées en retrait du bord flottaient au
-    // lieu d'éclairer une arête.
-    const bevel = axe(0.55, 0.55);
-    bevel.addColorStop(0, shade(base, 0.54));
-    bevel.addColorStop(0.42, shade(base, 0.16));
-    bevel.addColorStop(0.6, shade(base, -0.14));
-    bevel.addColorStop(1, shade(base, -0.44));
-
-    return { body, rim, bevel };
-  }
-
   private drawBlock(b: BlockVisual, scene: Scene) {
     const { ctx } = this;
     const base = colorFor(b.value);
@@ -328,8 +265,6 @@ export class Renderer {
     const angle = b.body.angle;
 
     const art = blockArt(b.value);
-    const paints = this.blockPaints(art, base, angle);
-    const pen = 2 * CORNER;
 
     const px = b.body.position.x + (jitter ? (Math.random() - 0.5) * jitter : 0);
     const py = b.body.position.y + (jitter ? (Math.random() - 0.5) * jitter : 0);
@@ -342,76 +277,38 @@ export class Renderer {
     ctx.lineCap = 'round';
 
     if (b.dragged) {
-      ctx.lineWidth = pen + 13;
+      ctx.lineWidth = PEN + 13;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
       ctx.stroke(art.path);
-      ctx.lineWidth = pen + 6;
+      ctx.lineWidth = PEN + 6;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.82)';
       ctx.stroke(art.path);
     }
 
-    // Le liseré vient d'un trait plus large passé dessous puis recouvert :
-    // c'est le seul moyen de cerner la silhouette entière d'un seul contour.
-    ctx.lineWidth = pen + 2.2;
-    ctx.strokeStyle = paints.rim;
-    ctx.fillStyle = paints.rim;
-    ctx.stroke(art.path);
-    ctx.fill(art.path);
-
-    // La plume dessine la silhouette : en la rétrécissant de deux fois le
-    // biseau, le corps laisse dépasser un anneau régulier tout autour.
-    ctx.lineWidth = pen;
-    ctx.strokeStyle = paints.bevel;
-    ctx.fillStyle = paints.bevel;
-    ctx.stroke(art.path);
-    ctx.fill(art.path);
-
-    ctx.lineWidth = pen - 2 * BEVEL;
-    ctx.strokeStyle = paints.body;
-    ctx.fillStyle = paints.body;
-    ctx.stroke(art.path);
-    ctx.fill(art.path);
-
-    this.drawSeams(art, angle);
+    paintBody(ctx, art, blockPaints(ctx, art, base, angle));
+    paintSeams(ctx, art, angle);
     this.drawShine(art, b.pop);
-    this.drawEyes(b, base, scene);
+    drawCharacter(ctx, b.value, base, this.pose(b, scene), this.faces);
     ctx.restore();
   }
 
-  /**
-   * Rainures entre cubes : un trait sombre, doublé d'un trait clair sur la
-   * paroi qui fait face à la lumière. C'est ce couple qui les fait lire comme
-   * creusées et non comme dessinées.
-   */
-  private drawSeams(art: BlockArt, angle: number) {
-    const { ctx } = this;
-    const l = this.localLight(angle);
-
-    // Les deux familles de traits sont tracées d'un seul coup : dessinés
-    // segment par segment, leurs alphas se cumulaient aux croisements et
-    // laissaient un point sombre à chaque intersection.
-    const creux = new Path2D();
-    const clair = new Path2D();
-
-    for (const [x1, y1, x2, y2] of art.seams) {
-      const horizontale = y1 === y2;
-      const nx = horizontale ? 0 : 1;
-      const ny = horizontale ? 1 : 0;
-      const cote = nx * l.x + ny * l.y >= 0 ? -1.5 : 1.5;
-
-      creux.moveTo(x1, y1);
-      creux.lineTo(x2, y2);
-      clair.moveTo(x1 + nx * cote, y1 + ny * cote);
-      clair.lineTo(x2 + nx * cote, y2 + ny * cote);
+  /** Regard et paupières, dans le repère du bloc. */
+  private pose(b: BlockVisual, scene: Scene): Pose {
+    // Le regard suit le doigt s'il est là, sinon il regarde devant.
+    let gazeX = 0;
+    let gazeY = 0;
+    if (scene.pointer) {
+      const wx = scene.pointer.x - b.body.position.x;
+      const wy = scene.pointer.y - b.body.position.y;
+      const cos = Math.cos(-b.body.angle);
+      const sin = Math.sin(-b.body.angle);
+      const rx = wx * cos - wy * sin;
+      const ry = wx * sin + wy * cos;
+      const d = Math.hypot(rx, ry) || 1;
+      gazeX = (rx / d) * 2.6;
+      gazeY = (ry / d) * 2.6;
     }
-
-    ctx.lineWidth = 1.7;
-    ctx.strokeStyle = 'rgba(12, 16, 26, 0.22)';
-    ctx.stroke(creux);
-
-    ctx.lineWidth = 1.3;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.17)';
-    ctx.stroke(clair);
+    return { gazeX, gazeY, blink: b.blink };
   }
 
   /** Balayage de lumière sur un bloc qui vient d'apparaître ou de fusionner. */
@@ -437,61 +334,6 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawEyes(b: BlockVisual, base: string, scene: Scene) {
-    const { ctx } = this;
-    const cells = centeredCells(b.value);
-    const face = cells[shapeFor(b.value).faceIndex];
-    const fx = face.x * UNIT;
-    const fy = face.y * UNIT;
-
-    // Le regard suit le doigt s'il est là, sinon il regarde devant.
-    let lx = 0;
-    let ly = 0;
-    if (scene.pointer) {
-      const wx = scene.pointer.x - b.body.position.x;
-      const wy = scene.pointer.y - b.body.position.y;
-      const cos = Math.cos(-b.body.angle);
-      const sin = Math.sin(-b.body.angle);
-      const rx = wx * cos - wy * sin;
-      const ry = wx * sin + wy * cos;
-      const d = Math.hypot(rx, ry) || 1;
-      lx = (rx / d) * 2.4;
-      ly = (ry / d) * 2.4;
-    }
-
-    const dx = UNIT * 0.2;
-    const open = 1 - b.blink;
-    // La paupière tombe d'en haut : l'œil rétrécit et descend un peu.
-    const eyeY = fy - UNIT * 0.02 + (1 - open) * UNIT * 0.035;
-    const rx = UNIT * 0.115;
-    const ry = UNIT * 0.14 * open + 0.55;
-
-    for (const s of [-1, 1]) {
-      const ex = fx + s * dx;
-      ctx.fillStyle = 'rgba(12, 16, 26, 0.16)';
-      ctx.beginPath();
-      ctx.ellipse(ex, eyeY + 0.9, rx * 1.06, ry * 1.06, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#fdfdfd';
-      ctx.beginPath();
-      ctx.ellipse(ex, eyeY, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = shade(base, -0.78);
-      ctx.beginPath();
-      ctx.ellipse(ex + lx, eyeY + ly, UNIT * 0.056, UNIT * 0.072 * open + 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (open > 0.45) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${(0.9 * open).toFixed(2)})`;
-        ctx.beginPath();
-        ctx.arc(ex + lx - UNIT * 0.022, eyeY + ly - UNIT * 0.03, UNIT * 0.022, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-
   private drawBadge(b: BlockVisual) {
     const { ctx } = this;
     const base = colorFor(b.value);
@@ -499,8 +341,9 @@ export class Renderer {
     const x = b.body.position.x;
     const w = 21 + label.length * 11;
     const h = 26;
-    // Au-dessus du bloc : en dessous, la barre d'outils masquerait le chiffre.
-    const y = Math.max(h / 2 + 6, b.body.bounds.min.y - 16);
+    // Au-dessus du bloc, et assez haut pour dégager la coiffure : la pastille
+    // coupait la couronne du 10 et les épis du 3.
+    const y = Math.max(h / 2 + 6, b.body.bounds.min.y - 26);
 
     // Dessiné dans un repère centré sur la pastille : le dégradé ne dépend
     // alors plus de la position, donc il se garde d'une image à l'autre.

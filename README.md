@@ -16,7 +16,7 @@ npm install && npm run dev
 
 | Geste | Effet |
 | --- | --- |
-| Bouton **+1** | fait tomber un cube de plus |
+| Appuyer sur un **bloc de la barre** (1 à 10) | le fait tomber dans la scène |
 | Glisser un bloc contre un autre, puis lâcher | fusion — un aperçu montre `3 + 4 = 7` avant de valider |
 | Tenir un bloc et le **secouer** | détache une unité à chaque secousse |
 | Tracer un **trait franc** à travers un bloc | le coupe en deux là où le trait passe |
@@ -28,6 +28,28 @@ npm install && npm run dev
 si le contact suffisait, l'écran fusionnerait tout seul en un bloc géant. La fusion
 n'a donc lieu qu'au *relâché* d'un glisser qui a réellement parcouru du chemin
 (`MERGE_MIN_TRAVEL`) — ni le contact passif, ni un simple tap ne fusionnent.
+
+**Un personnage par nombre.** Coiffure, bouche et accessoires sont fixés par la
+valeur (`src/render/faces.ts`) : le 3 porte une moustache, le 8 des lunettes
+rondes, le 10 une couronne. La couleur seule ne suffisait pas — deux teintes
+voisines se confondent de loin, et un enfant retient bien mieux « le moustachu »
+que « le jaune orangé ». Une règle traverse la série : **la couronne marque une
+dizaine.** De 11 à 19, le personnage garde la couronne du 10 et le visage de son
+unité — 13 a la moustache du 3, 18 les lunettes du 8 — et le 20 porte deux rangs.
+La décomposition se lit sur la tête.
+
+Les parties fixes du visage sont peintes une fois puis reposées en image : au
+trait, vingt visages coûtaient 2 ms par image, soit quatre fois le reste de la
+scène. Seuls le regard et les verres sont retracés à chaque tour.
+
+**Un bouton par bloc, dessiné par le même code que la scène.** La barre du bas
+montre les blocs de 1 à 10 avec leur silhouette réelle et leur personnage : le
+bouton montre exactement ce qu'il pose. Deux dessins séparés auraient divergé au
+premier changement de coiffure.
+
+**Un espace par enfant.** Chaque espace porte un prénom et garde sa propre
+construction (`src/game/persist.ts`). Changer d'espace range la scène en cours
+sur son rayon avant de sortir l'autre.
 
 **Forme canonique plutôt qu'émergente.** Chaque nombre a une forme officielle
 (`src/core/shape.ts`) : le rectangle le plus carré possible, et pour un nombre
@@ -59,7 +81,7 @@ src/input/     reconnaissance de gestes (secousse, coupe) — pur, testé
 src/render/    canvas 2D
 src/audio/     synthèse sonore et voix
 src/game/      orchestration, boucle à pas fixe, sauvegarde
-src/ui/        React : uniquement la barre d'outils et l'aide
+src/ui/        React : barres, espaces et aide — rien de la scène
 ```
 
 React ne sert que pour l'habillage. La boucle de jeu vit en dehors de React et
@@ -75,10 +97,11 @@ pilote le canvas directement.
 Le concept « un nombre est fait de n cubes » vient du matériel Cuisenaire et des
 blocs de Dienes, dans le domaine public depuis des décennies. Ce projet n'utilise
 ni les personnages, ni les noms, ni la palette d'aucune œuvre sous licence :
-couleurs propres, visages minimalistes, nom original.
+couleurs propres, personnages dessinés pour ce projet, nom original.
 
 ## Suite
 
-- Mode défi (« fabrique un 7 ! »), collection des formes découvertes.
+- Niveaux d'apprentissage : « fais un bloc de 8 », puis avec contraintes
+  (« fais 17 avec des 3 et des 1 »), le mode libre restant toujours accessible.
 - Multiplication par rectangles (la forme canonique s'y prête déjà).
 - Soudure telle quelle + geste « ranger » qui claque la forme canonique.

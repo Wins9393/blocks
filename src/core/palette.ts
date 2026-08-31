@@ -4,9 +4,9 @@
  * distinguer d'un coup d'œil.
  */
 const COLORS = [
-  '#F4C95D', // 1  miel
+  '#FF5A5F', // 1  rouge corail
   '#5FA8D3', // 2  ciel
-  '#E4715E', // 3  corail
+  '#FFB01F', // 3  ambre
   '#6BBF59', // 4  pomme
   '#9B7EDE', // 5  lavande
   '#F2A365', // 6  abricot
@@ -14,7 +14,7 @@ const COLORS = [
   '#E36588', // 8  framboise
   '#C77DFF', // 9  mauve
   '#8AC926', // 10 citron
-  '#F5B841', // 11 ambre
+  '#F4C95D', // 11 miel
   '#4D9DE0', // 12 bleu franc
   '#EF7B45', // 13 mandarine
   '#7BC4A4', // 14 menthe

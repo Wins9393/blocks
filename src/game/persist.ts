@@ -1,5 +1,11 @@
-const SCENE_KEY = 'blocks.scene.v1';
 const PREFS_KEY = 'blocks.prefs.v1';
+const SPACES_KEY = 'blocks.spaces.v1';
+const SCENE_PREFIX = 'blocks.scene.v2:';
+/** Sauvegarde d'avant les espaces : elle devient la scène du premier espace. */
+const LEGACY_SCENE_KEY = 'blocks.scene.v1';
+
+export const DEFAULT_SPACE_ID = 'defaut';
+export const NAME_MAX = 16;
 
 export interface SavedBlock {
   v: number;
@@ -12,6 +18,18 @@ export interface SavedScene {
   /** Largeur de l'écran au moment de la sauvegarde, pour la remettre à l'échelle. */
   w: number;
   blocks: SavedBlock[];
+}
+
+export interface Space {
+  id: string;
+  name: string;
+  /** Indice de couleur dans la palette, pour reconnaître l'espace d'un coup d'œil. */
+  tint: number;
+}
+
+export interface SpaceBook {
+  spaces: Space[];
+  currentId: string;
 }
 
 export interface Prefs {
@@ -38,8 +56,72 @@ function write(key: string, value: unknown) {
   }
 }
 
-export function loadScene(): SavedScene | null {
-  const data = read<SavedScene>(SCENE_KEY);
+function drop(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Idem : rien de vital.
+  }
+}
+
+// --- espaces --------------------------------------------------------------
+
+/** Nom propre : coupé, borné, et jamais vide. */
+export function cleanName(raw: string): string {
+  const name = raw.replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
+  return name || 'Sans nom';
+}
+
+/**
+ * L'identifiant relie un espace à sa scène : deux espaces qui le partagent
+ * partageraient la construction. La part aléatoire est donc large, et de
+ * longueur fixe pour ne pas se confondre avec l'horodatage qui la précède.
+ */
+export function newSpaceId(): string {
+  const alea = Math.random().toString(36).slice(2, 10).padEnd(8, '0');
+  return `e${Date.now().toString(36)}-${alea}`;
+}
+
+export function makeSpace(name: string, tint: number): Space {
+  return { id: newSpaceId(), name: cleanName(name), tint };
+}
+
+/**
+ * Le carnet d'espaces. Il en contient toujours au moins un, et `currentId`
+ * en désigne toujours un qui existe : le reste de l'application n'a jamais
+ * à se demander quoi faire d'une liste vide.
+ */
+export function loadSpaces(): SpaceBook {
+  const data = read<Partial<SpaceBook>>(SPACES_KEY);
+  const spaces = (Array.isArray(data?.spaces) ? data.spaces : [])
+    .filter((s): s is Space => typeof s?.id === 'string' && typeof s?.name === 'string')
+    .map((s) => ({ id: s.id, name: cleanName(s.name), tint: Number(s.tint) || 1 }));
+
+  if (!spaces.length) {
+    spaces.push({ id: DEFAULT_SPACE_ID, name: 'Mon espace', tint: 1 });
+  }
+  const currentId = spaces.some((s) => s.id === data?.currentId)
+    ? (data!.currentId as string)
+    : spaces[0].id;
+  return { spaces, currentId };
+}
+
+export function saveSpaces(book: SpaceBook) {
+  write(SPACES_KEY, book);
+}
+
+// --- scènes ---------------------------------------------------------------
+
+function sceneKey(id: string): string {
+  return SCENE_PREFIX + id;
+}
+
+export function loadScene(spaceId: string): SavedScene | null {
+  // Le tout premier espace hérite de la scène d'avant : on ne fait pas
+  // disparaître la construction en cours en livrant les espaces.
+  const data =
+    read<SavedScene>(sceneKey(spaceId)) ??
+    (spaceId === DEFAULT_SPACE_ID ? read<SavedScene>(LEGACY_SCENE_KEY) : null);
   if (!data || !Array.isArray(data.blocks) || !Number.isFinite(data.w)) return null;
   const blocks = data.blocks.filter(
     (b) => typeof b?.v === 'number' && Number.isFinite(b.x) && Number.isFinite(b.y),
@@ -47,9 +129,16 @@ export function loadScene(): SavedScene | null {
   return blocks.length ? { w: data.w, blocks } : null;
 }
 
-export function saveScene(scene: SavedScene) {
-  write(SCENE_KEY, scene);
+export function saveScene(spaceId: string, scene: SavedScene) {
+  write(sceneKey(spaceId), scene);
 }
+
+export function dropScene(spaceId: string) {
+  drop(sceneKey(spaceId));
+  if (spaceId === DEFAULT_SPACE_ID) drop(LEGACY_SCENE_KEY);
+}
+
+// --- préférences ----------------------------------------------------------
 
 export function loadPrefs(): Prefs {
   return { ...DEFAULT_PREFS, ...(read<Partial<Prefs>>(PREFS_KEY) ?? {}) };
