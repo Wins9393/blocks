@@ -4,16 +4,6 @@ import { centeredCells, shapeFor } from '../core/shape';
 /** Rayon des arrondis de la silhouette, en pixels. */
 export const CORNER = UNIT * 0.2;
 
-export interface Edge {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** Normale sortante, dans le repère du bloc. */
-  nx: number;
-  ny: number;
-}
-
 export interface BlockArt {
   /**
    * Chemin « érodé » : les cellules rétrécies de CORNER, plus un pont partout
@@ -24,12 +14,6 @@ export interface BlockArt {
   path: Path2D;
   /** Rainures le long des arêtes partagées : on doit pouvoir compter les cubes. */
   seams: Array<[number, number, number, number]>;
-  /**
-   * Arêtes libres du contour, dans les quatre directions, avec leur normale.
-   * Le rendu décide laquelle s'allume selon l'orientation réelle du bloc :
-   * c'est ce qui fait glisser la lumière quand il bascule.
-   */
-  edges: Edge[];
   /**
    * Union des cellules à taille pleine, coins vifs. Sert de zone de découpe
    * pour les effets translucides, qu'on ne peut pas borner au contour arrondi
@@ -99,6 +83,17 @@ export function blockArt(value: number): BlockArt {
       path.rect(px - half + r, py + half - r, inner, 2 * r);
       push(horizontal, g.y, g.x);
     }
+
+    // Coin commun à quatre cubes : les ponts ne s'y rejoignent pas et laissent
+    // un trou carré. Tracé à pleine plume il se referme pile, mais toute plume
+    // plus fine — le biseau — le rouvrirait au milieu du bloc.
+    if (
+      occupied.has(key(g.x + 1, g.y)) &&
+      occupied.has(key(g.x, g.y + 1)) &&
+      occupied.has(key(g.x + 1, g.y + 1))
+    ) {
+      path.rect(px + half - r, py + half - r, 2 * r, 2 * r);
+    }
   }
 
   const trim = r * 0.55;
@@ -126,45 +121,6 @@ export function blockArt(value: number): BlockArt {
     }
   }
 
-  // Une arête par face libre, dans les quatre directions, fusionnée par suite
-  // de cellules : un reflet par cube ferait un tas de cubes là où on veut une
-  // seule pièce moulée.
-  const bande = UNIT * 0.13;
-  const marge = r * 0.75;
-  const bout = r * 1.3;
-  const edges: Edge[] = [];
-
-  for (const [nx, ny] of [
-    [0, -1],
-    [0, 1],
-    [-1, 0],
-    [1, 0],
-  ] as const) {
-    const horizontale = nx === 0;
-    const lignes = new Map<number, number[]>();
-    for (const c of shape.cells) {
-      if (occupied.has(key(c.x + nx, c.y + ny))) continue;
-      push(lignes, horizontale ? c.y : c.x, horizontale ? c.x : c.y);
-    }
-
-    for (const [ligne, suites] of lignes) {
-      for (const [from, to] of runs(suites)) {
-        const debut = (from - 0.5 + (horizontale ? offX : offY)) * UNIT + bout;
-        const fin = (to + 0.5 + (horizontale ? offX : offY)) * UNIT - bout;
-        const bord = horizontale
-          ? (ligne + ny * 0.5 + offY) * UNIT
-          : (ligne + nx * 0.5 + offX) * UNIT;
-        const dedans = bord - (horizontale ? ny : nx) * (marge + bande / 2);
-
-        edges.push(
-          horizontale
-            ? { x: debut, y: dedans - bande / 2, w: fin - debut, h: bande, nx, ny }
-            : { x: dedans - bande / 2, y: debut, w: bande, h: fin - debut, nx, ny },
-        );
-      }
-    }
-  }
-
   const clip = new Path2D();
   for (const c of cells) {
     clip.rect(c.x * UNIT - half, c.y * UNIT - half, UNIT, UNIT);
@@ -173,7 +129,6 @@ export function blockArt(value: number): BlockArt {
   const art: BlockArt = {
     path,
     seams,
-    edges,
     clip,
     top: Math.min(...cells.map((c) => c.y)) * UNIT - half,
     bottom: Math.max(...cells.map((c) => c.y)) * UNIT + half,

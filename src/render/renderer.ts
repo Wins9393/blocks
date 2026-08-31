@@ -13,7 +13,7 @@ const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -appl
  * source. Tout l'ombrage en découle, et surtout : elle ne tourne pas avec les
  * blocs. C'est ce qui distingue un objet éclairé d'un autocollant.
  */
-const LIGHT = { x: -0.42, y: -0.91 };
+const LIGHT = { x: -0.6, y: -0.8 };
 
 /**
  * Décalage de l'épaisseur, identique pour tous les blocs : elle se voit du côté
@@ -22,6 +22,9 @@ const LIGHT = { x: -0.42, y: -0.91 };
  * au centre et sur deux au bord — incohérent d'un bloc à l'autre.
  */
 const DEPTH = { x: 4.6, y: 6.8 };
+
+/** Largeur du biseau qui court le long du contour, en pixels. */
+const BEVEL = 3.6;
 
 export interface BlockVisual {
   id: number;
@@ -294,18 +297,30 @@ export class Renderer {
     body.addColorStop(0.62, base);
     body.addColorStop(1, shade(base, -0.3));
 
-    const rim = ctx.createLinearGradient(
-      mx + l.x * w * 0.5,
-      my + l.y * h * 0.5,
-      mx - l.x * w * 0.5,
-      my - l.y * h * 0.5,
-    );
+    const axe = (from: number, to: number): CanvasGradient =>
+      ctx.createLinearGradient(
+        mx + l.x * w * from,
+        my + l.y * h * from,
+        mx - l.x * w * to,
+        my - l.y * h * to,
+      );
+
     // Assez pour détacher le bloc du fond, pas assez pour passer pour une
     // tranche : seule l'épaisseur a le droit de faire du relief.
+    const rim = axe(0.5, 0.5);
     rim.addColorStop(0, shade(base, -0.04));
     rim.addColorStop(1, shade(base, -0.4));
 
-    return { body, rim };
+    // Le biseau : il épouse tout le contour, clair du côté de la lumière,
+    // sombre à l'opposé. Des baguettes posées en retrait du bord flottaient au
+    // lieu d'éclairer une arête.
+    const bevel = axe(0.55, 0.55);
+    bevel.addColorStop(0, shade(base, 0.54));
+    bevel.addColorStop(0.42, shade(base, 0.16));
+    bevel.addColorStop(0.6, shade(base, -0.14));
+    bevel.addColorStop(1, shade(base, -0.44));
+
+    return { body, rim, bevel };
   }
 
   private drawBlock(b: BlockVisual, scene: Scene) {
@@ -366,44 +381,24 @@ export class Renderer {
     ctx.stroke(art.path);
     ctx.fill(art.path);
 
+    // La plume dessine la silhouette : en la rétrécissant de deux fois le
+    // biseau, le corps laisse dépasser un anneau régulier tout autour.
     ctx.lineWidth = pen;
+    ctx.strokeStyle = paints.bevel;
+    ctx.fillStyle = paints.bevel;
+    ctx.stroke(art.path);
+    ctx.fill(art.path);
+
+    ctx.lineWidth = pen - 2 * BEVEL;
     ctx.strokeStyle = paints.body;
     ctx.fillStyle = paints.body;
     ctx.stroke(art.path);
     ctx.fill(art.path);
 
-    this.drawEdges(art, angle);
     this.drawSeams(art, angle);
     this.drawShine(art, b.pop);
     this.drawEyes(b, base, scene);
     ctx.restore();
-  }
-
-  /**
-   * Arêtes du contour : celles tournées vers la lumière s'allument, celles qui
-   * lui tournent le dos s'assombrissent. Quand un bloc se couche, le reflet
-   * passe tout seul du dessus au flanc.
-   */
-  private drawEdges(art: BlockArt, angle: number) {
-    const { ctx } = this;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    for (const e of art.edges) {
-      const nx = e.nx * cos - e.ny * sin;
-      const ny = e.nx * sin + e.ny * cos;
-      const face = nx * LIGHT.x + ny * LIGHT.y;
-      if (Math.abs(face) < 0.06) continue;
-
-      const force = Math.pow(Math.abs(face), 1.3);
-      ctx.fillStyle =
-        face > 0
-          ? `rgba(255, 255, 255, ${(0.36 * force).toFixed(3)})`
-          : `rgba(8, 11, 18, ${(0.24 * force).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.roundRect(e.x, e.y, e.w, e.h, Math.min(e.w, e.h) / 2);
-      ctx.fill();
-    }
   }
 
   /**
@@ -415,26 +410,31 @@ export class Renderer {
     const { ctx } = this;
     const l = this.localLight(angle);
 
+    // Les deux familles de traits sont tracées d'un seul coup : dessinés
+    // segment par segment, leurs alphas se cumulaient aux croisements et
+    // laissaient un point sombre à chaque intersection.
+    const creux = new Path2D();
+    const clair = new Path2D();
+
     for (const [x1, y1, x2, y2] of art.seams) {
       const horizontale = y1 === y2;
       const nx = horizontale ? 0 : 1;
       const ny = horizontale ? 1 : 0;
       const cote = nx * l.x + ny * l.y >= 0 ? -1.5 : 1.5;
 
-      ctx.lineWidth = 1.7;
-      ctx.strokeStyle = 'rgba(12, 16, 26, 0.22)';
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-
-      ctx.lineWidth = 1.3;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.17)';
-      ctx.beginPath();
-      ctx.moveTo(x1 + nx * cote, y1 + ny * cote);
-      ctx.lineTo(x2 + nx * cote, y2 + ny * cote);
-      ctx.stroke();
+      creux.moveTo(x1, y1);
+      creux.lineTo(x2, y2);
+      clair.moveTo(x1 + nx * cote, y1 + ny * cote);
+      clair.lineTo(x2 + nx * cote, y2 + ny * cote);
     }
+
+    ctx.lineWidth = 1.7;
+    ctx.strokeStyle = 'rgba(12, 16, 26, 0.22)';
+    ctx.stroke(creux);
+
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.17)';
+    ctx.stroke(clair);
   }
 
   /** Balayage de lumière sur un bloc qui vient d'apparaître ou de fusionner. */
@@ -595,14 +595,13 @@ export class Renderer {
     ctx.stroke(art.path);
     ctx.fill(art.path);
 
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = rgba(color, 0.7);
+    const grille = new Path2D();
     for (const [x1, y1, x2, y2] of art.seams) {
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      if (y1 === y2) grille.rect(x1, y1 - 0.75, x2 - x1, 1.5);
+      else grille.rect(x1 - 0.75, y1, 1.5, y2 - y1);
     }
+    ctx.fillStyle = rgba(color, 0.7);
+    ctx.fill(grille);
 
     const text = ghost.ok ? `${ghost.a} + ${ghost.b} = ${sum}` : 'trop gros !';
     const ty = art.top - 26;
