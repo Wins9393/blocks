@@ -15,14 +15,6 @@ const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -appl
  */
 const LIGHT = { x: -0.6, y: -0.8 };
 
-/**
- * Décalage de l'épaisseur, identique pour tous les blocs : elle se voit du côté
- * opposé à la lumière, donc en bas à droite, et jamais sur plus de deux faces.
- * Le faire dépendre de la position à l'écran donnait une épaisseur sur une face
- * au centre et sur deux au bord — incohérent d'un bloc à l'autre.
- */
-const DEPTH = { x: 4.6, y: 6.8 };
-
 /** Largeur du biseau qui court le long du contour, en pixels. */
 const BEVEL = 3.6;
 
@@ -305,8 +297,8 @@ export class Renderer {
         my - l.y * h * to,
       );
 
-    // Assez pour détacher le bloc du fond, pas assez pour passer pour une
-    // tranche : seule l'épaisseur a le droit de faire du relief.
+    // Le liseré détache le bloc du fond. Il reste plus sombre du côté opposé
+    // à la lumière, mais assez discret pour ne pas se lire comme une tranche.
     const rim = axe(0.5, 0.5);
     rim.addColorStop(0, shade(base, -0.04));
     rim.addColorStop(1, shade(base, -0.4));
@@ -341,21 +333,6 @@ export class Renderer {
 
     const px = b.body.position.x + (jitter ? (Math.random() - 0.5) * jitter : 0);
     const py = b.body.position.y + (jitter ? (Math.random() - 0.5) * jitter : 0);
-
-    // Épaisseur : la même silhouette, décalée et assombrie, posée dessous.
-    // Le décalage reste en repère monde, il ne tourne pas avec le bloc.
-    ctx.save();
-    ctx.translate(px + DEPTH.x, py + DEPTH.y);
-    ctx.rotate(angle);
-    ctx.scale(sx, sy);
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = pen + 3.4;
-    ctx.strokeStyle = shade(base, -0.64);
-    ctx.fillStyle = shade(base, -0.64);
-    ctx.stroke(art.path);
-    ctx.fill(art.path);
-    ctx.restore();
 
     ctx.save();
     ctx.translate(px, py);
