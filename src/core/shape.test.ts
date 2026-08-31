@@ -70,7 +70,7 @@ describe('shapeFor', () => {
 
 describe('rectanglesFor', () => {
   it('pave exactement la forme, sans trou ni recouvrement', () => {
-    for (let n = 1; n <= 60; n++) {
+    for (let n = 1; n <= MAX_VALUE; n++) {
       const shape = shapeFor(n);
       const couverture = new Map<string, number>();
       for (const r of rectanglesFor(n)) {

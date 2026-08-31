@@ -101,8 +101,13 @@ pilote le canvas directement.
 
 ## Réglages utiles
 
-`src/core/constants.ts` — `MAX_VALUE` (20) plafonne la taille d'un bloc,
+`src/core/constants.ts` — `MAX_VALUE` (100) plafonne la taille d'un bloc,
 `MAX_UNITS` (150) le total à l'écran, `UNIT` (36 px) la taille d'un cube.
+
+La fusion s'arrête aussi plus tôt quand le résultat ne tiendrait pas entre les
+murs (`World.fits`) : un bloc plus large que la scène y resterait coincé et le
+solveur finirait par l'éjecter. Sur un écran de 320 px, seuls le 81, le 90, le
+99 et le 100 — les formes de neuf et dix cubes de large — sont hors d'atteinte.
 
 ## Licence et inspiration
 

@@ -462,11 +462,16 @@ export class Game {
         ? this.world.blocks.get(drag.candidate)
         : null;
     if (candidate) {
-      if (block.value + candidate.value <= MAX_VALUE) this.merge(block, candidate);
+      if (this.canMerge(block.value + candidate.value)) this.merge(block, candidate);
       else sfx.playRefuse();
     }
     this.dirty = true;
     this.emit();
+  }
+
+  /** La fusion s'arrête au plafond, et avant si le bloc ne tient pas à l'écran. */
+  private canMerge(sum: number): boolean {
+    return sum <= MAX_VALUE && this.world.fits(sum);
   }
 
   private merge(a: Block, b: Block) {
@@ -781,7 +786,7 @@ export class Game {
       const other = drag.candidate != null ? this.world.blocks.get(drag.candidate) : null;
       if (block && other && !ghost) {
         const sum = block.value + other.value;
-        const ok = sum <= MAX_VALUE;
+        const ok = this.canMerge(sum);
         // L'aperçu flotte au-dessus du couple : posé entre les deux blocs, il
         // serait masqué par eux et l'enfant ne verrait pas le résultat.
         const halfH = (shapeFor(ok ? sum : 1).h * UNIT) / 2;

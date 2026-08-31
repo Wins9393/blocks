@@ -2,7 +2,7 @@
 export const UNIT = 36;
 
 /** Valeur maximale d'un bloc. Au-delà, la fusion est refusée. */
-export const MAX_VALUE = 20;
+export const MAX_VALUE = 100;
 
 /** Nombre total de cubes autorisés dans la scène (garde-fou perfs). */
 export const MAX_UNITS = 150;

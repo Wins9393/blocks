@@ -62,6 +62,15 @@ export class World {
     return [...this.blocks.values()].map((b) => b.body);
   }
 
+  /**
+   * Un bloc plus large que la scène resterait coincé entre les deux murs, et
+   * le solveur l'éjecterait. Sur un petit écran, la fusion s'arrête donc avant
+   * la valeur maximale.
+   */
+  fits(value: number): boolean {
+    return shapeFor(value).w * UNIT + 4 <= this.width;
+  }
+
   resize(width: number, height: number, bottomInset: number) {
     this.width = width;
     this.height = height;
