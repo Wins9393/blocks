@@ -40,6 +40,7 @@ body,
 
 .toolbar {
   position: fixed;
+  z-index: 5;
   left: 50%;
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
@@ -143,6 +144,7 @@ button:disabled {
 .hints {
   position: fixed;
   inset: 0;
+  z-index: 10;
   display: grid;
   place-items: center;
   background: rgba(12, 16, 24, 0.55);
@@ -151,14 +153,42 @@ button:disabled {
 }
 
 .hints-card {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px 26px;
-  padding: 26px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 30px 26px;
   border-radius: 26px;
   background: var(--panel);
   border: 1px solid var(--panel-edge);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.hints-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.hints-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 26px;
+}
+
+.hints-close {
+  padding: 13px 30px;
+  border-radius: 18px;
+  font-size: 17px;
+  font-weight: 800;
+  background: linear-gradient(180deg, #ffdb85, #f0b73f);
+  color: #3a2b06;
+  box-shadow: 0 4px 0 #b9862a;
+}
+
+.hints-close:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #b9862a;
 }
 
 .hint {
@@ -187,5 +217,17 @@ button:disabled {
   }
   to {
     opacity: 1;
+  }
+}
+
+/* Cinq boutons doivent tenir sur un ecran de telephone. */
+@media (max-width: 420px) {
+  .toolbar {
+    gap: 8px;
+    padding: 9px 11px;
+  }
+
+  .add-btn {
+    width: 76px;
   }
 }

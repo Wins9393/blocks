@@ -8,9 +8,18 @@ interface Props {
   onUndo: () => void;
   onClear: () => void;
   onToggleMute: () => void;
+  onHelp: () => void;
 }
 
-export default function Toolbar({ state, muted, onAdd, onUndo, onClear, onToggleMute }: Props) {
+export default function Toolbar({
+  state,
+  muted,
+  onAdd,
+  onUndo,
+  onClear,
+  onToggleMute,
+  onHelp,
+}: Props) {
   const [armed, setArmed] = useState(false);
 
   // Le bouton « tout effacer » demande deux appuis : un enfant ne vide pas
@@ -77,6 +86,13 @@ export default function Toolbar({ state, muted, onAdd, onUndo, onClear, onToggle
             <path d="M16 9a4 4 0 0 1 0 6" />
           </svg>
         )}
+      </button>
+
+      <button className="icon-btn small" onClick={onHelp} aria-label="Comment jouer" title="Comment jouer">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9.2 9.3a2.9 2.9 0 1 1 3.9 2.7c-.7.3-1.1.9-1.1 1.7v.5" />
+          <path d="M12 17.6v.01" />
+        </svg>
       </button>
 
       {state.full && <div className="warning">C&apos;est plein !</div>}

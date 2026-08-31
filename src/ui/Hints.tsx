@@ -1,5 +1,5 @@
 interface Props {
-  onDismiss: () => void;
+  onClose: () => void;
 }
 
 const HINTS = [
@@ -9,16 +9,26 @@ const HINTS = [
   { icon: '✂️', label: 'Trace un trait pour couper' },
 ];
 
-export default function Hints({ onDismiss }: Props) {
+/**
+ * Volontairement modale : un enfant balaie l'écran des qu'il s'allume, donc une
+ * carte qui se ferme au premier contact disparaît avant d'avoir été lue.
+ */
+export default function Hints({ onClose }: Props) {
   return (
-    <div className="hints" onPointerDown={onDismiss}>
+    <div className="hints">
       <div className="hints-card">
-        {HINTS.map((h) => (
-          <div className="hint" key={h.label}>
-            <span className="hint-icon">{h.icon}</span>
-            <span className="hint-label">{h.label}</span>
-          </div>
-        ))}
+        <h1 className="hints-title">Comment jouer</h1>
+        <div className="hints-grid">
+          {HINTS.map((h) => (
+            <div className="hint" key={h.label}>
+              <span className="hint-icon">{h.icon}</span>
+              <span className="hint-label">{h.label}</span>
+            </div>
+          ))}
+        </div>
+        <button className="hints-close" onClick={onClose}>
+          C&apos;est parti !
+        </button>
       </div>
     </div>
   );

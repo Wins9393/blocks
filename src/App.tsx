@@ -16,6 +16,7 @@ export default function App() {
     full: false,
   });
   const [prefs, setPrefs] = useState(loadPrefs);
+  const [hintsOpen, setHintsOpen] = useState(() => !prefs.hintsSeen);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -37,24 +38,23 @@ export default function App() {
     savePrefs(prefs);
   }, [prefs]);
 
-  const dismissHints = useCallback(() => {
+  const closeHints = useCallback(() => {
+    setHintsOpen(false);
     setPrefs((p) => (p.hintsSeen ? p : { ...p, hintsSeen: true }));
   }, []);
 
   return (
     <div className="app">
-      <canvas ref={canvasRef} className="stage" onPointerDown={dismissHints} />
-      {!prefs.hintsSeen && <Hints onDismiss={dismissHints} />}
+      <canvas ref={canvasRef} className="stage" />
+      {hintsOpen && <Hints onClose={closeHints} />}
       <Toolbar
         state={state}
         muted={prefs.muted}
-        onAdd={() => {
-          dismissHints();
-          gameRef.current?.spawnOne();
-        }}
+        onAdd={() => gameRef.current?.spawnOne()}
         onUndo={() => gameRef.current?.undo()}
         onClear={() => gameRef.current?.clearAll()}
         onToggleMute={() => setPrefs((p) => ({ ...p, muted: !p.muted }))}
+        onHelp={() => setHintsOpen(true)}
       />
     </div>
   );
