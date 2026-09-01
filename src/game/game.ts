@@ -1,6 +1,8 @@
 import Matter from 'matter-js';
 import {
   BOTTOM_SAFE,
+  BOTTOM_SAFE_LARGE,
+  LARGE_MIN,
   DRAG_GAIN,
   DRAG_MAX_SPEED,
   FALLBACK_HEIGHT,
@@ -164,12 +166,12 @@ export class Game {
       // reste sans sol ni murs et tout tombe dans le vide.
       if (this.world.width > 0) return;
       this.renderer.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT);
-      this.world.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT, BOTTOM_SAFE);
+      this.world.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT, margeBas(FALLBACK_WIDTH));
       return;
     }
 
     this.renderer.resize(w, h);
-    this.world.resize(w, h, BOTTOM_SAFE);
+    this.world.resize(w, h, margeBas(w));
   };
 
   private onVisibility = () => {
@@ -908,6 +910,15 @@ function cubePositions(block: Block): Array<{ x: number; y: number }> {
       y: block.body.position.y + ox * sin + oy * cos,
     };
   });
+}
+
+/**
+ * Hauteur réservée à la barre de blocs, sous le sol. Large, les dix blocs
+ * tiennent sur une seule rangée : le sol descend d'autant, sinon il flotte
+ * au-dessus d'une bande vide. Le seuil est celui de la feuille de style.
+ */
+function margeBas(width: number): number {
+  return width >= LARGE_MIN ? BOTTOM_SAFE_LARGE : BOTTOM_SAFE;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

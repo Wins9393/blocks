@@ -70,6 +70,15 @@ montre les blocs de 1 à 10 avec leur silhouette réelle et leur personnage : le
 bouton montre exactement ce qu'il pose. Deux dessins séparés auraient divergé au
 premier changement de coiffure.
 
+Sur un téléphone, les dix boutons tiennent en deux rangées de cinq. **À partir
+de 880 pixels de large, ils passent sur une seule rangée qui va d'un bord à
+l'autre** : chaque bouton grandit, et la scène récupère la hauteur d'une rangée
+— le sol descend d'autant (`BOTTOM_SAFE_LARGE`), sinon il flotterait au-dessus
+d'une bande vide. Le seuil vit en double, dans `src/core/constants.ts` et dans
+la feuille de style : les deux doivent basculer ensemble. Un bouton ne dépasse
+jamais le dixième de la rangée, sans quoi une mission qui n'offre qu'un seul
+bloc étirerait sa tuile sur toute la largeur.
+
 **La corbeille est une trappe dans le sol, hors du terrain de jeu.** Elle a
 d'abord été un objet posé sur la scène : c'était un obstacle physique autant
 qu'un encombrement, et les blocs venaient s'empiler contre elle. La rendre

@@ -50,6 +50,15 @@ export const GROUND_HEIGHT = 26;
 // visible au-dessus : sans bande de sol, les blocs ont l'air de flotter.
 export const BOTTOM_SAFE = 178;
 /**
+ * Largeur a partir de laquelle les dix blocs tiennent sur une seule rangee.
+ * La feuille de style connait le meme seuil (`@media (min-width: 880px)`) : les
+ * deux doivent basculer ensemble, sinon le sol flotte au-dessus des boutons ou
+ * la barre les recouvre.
+ */
+export const LARGE_MIN = 880;
+/** Meme marge, mais pour une seule rangee — un peu plus haute que sur deux. */
+export const BOTTOM_SAFE_LARGE = 136;
+/**
  * Corbeille : une trappe dans le sol, sous la ligne où les blocs se posent.
  *
  * Elle ne se montre que pendant un glisser. Surtout, elle est **hors du

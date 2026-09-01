@@ -159,6 +159,30 @@ body,
   pointer-events: none;
 }
 
+/* Quand la largeur le permet, les dix blocs tiennent sur une seule rangée qui
+   va d'un bord à l'autre : la barre cesse d'être un îlot de 440 px au milieu du
+   vide, chaque bouton grandit, et la scène récupère la hauteur d'une rangée
+   (`LARGE_MIN` et `BOTTOM_SAFE_LARGE`, dans src/core/constants.ts — les deux
+   seuils doivent basculer ensemble). */
+@media (min-width: 880px) {
+  .palette {
+    max-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .chip {
+    /* Un dixième de la rangée, écarts déduits : dix boutons la remplissent
+       exactement, et une barre restreinte à deux blocs garde la même taille
+       de bouton au lieu de s'étirer d'un bord à l'autre. */
+    max-width: calc((100% - 9 * 6px) / 10);
+    height: 76px;
+    /* La tuile est deux fois plus large que haute : le bloc, lui, est calé sur
+       la hauteur. Sans cette marge il touche le bord et se fait rogner par
+       l'arrondi des coins. */
+    padding: 6px 10px;
+  }
+}
+
 /* Le chiffre en pastille de coin : le personnage garde le centre. */
 .chip-num {
   position: absolute;
