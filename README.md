@@ -20,7 +20,7 @@ npm install && npm run dev
 | Glisser un bloc contre un autre, puis lâcher | fusion — un aperçu montre `3 + 4 = 7` avant de valider |
 | Tenir un bloc et le **secouer** | détache une unité à chaque secousse |
 | Tracer un **trait franc** à travers un bloc | le coupe en deux là où le trait passe |
-| Monter un bloc dans la **corbeille** | le supprime (annulable) |
+| Glisser un bloc dans la **corbeille** | le supprime (annulable) |
 
 ## Décisions de conception
 
@@ -59,14 +59,16 @@ montre les blocs de 1 à 10 avec leur silhouette réelle et leur personnage : le
 bouton montre exactement ce qu'il pose. Deux dessins séparés auraient divergé au
 premier changement de coiffure.
 
-**La corbeille n'existe que pendant un glisser.** Posée en permanence sur le
-sol, elle occupait un coin du terrain, coupait la surface de jeu en deux et
-récoltait les piles — c'était un obstacle physique autant qu'un objet à
-regarder. Elle n'est plus un corps : c'est une cible qui apparaît en haut de la
-scène dès qu'un bloc est tenu, dans la seule bande qui reste toujours vide, et
-qui s'efface au relâché. Le couvercle se soulève quand le doigt approche, et le
-bloc rétrécit juste ce qu'il faut pour tenir dans le seau : c'est ce geste qui
-dit « pose-le ici », sans un mot à lire.
+**La corbeille n'existe que pendant un glisser.** Permanente, elle occupait un
+coin du terrain et récoltait les piles — c'était un obstacle physique autant
+qu'un objet à regarder. Ce n'est plus un corps, et elle n'apparaît que lorsqu'un
+bloc est tenu : c'est ça qui libère la scène, pas sa position. Elle reste donc
+posée au sol, à portée de pouce. Le haut de l'écran d'un téléphone appartient au
+navigateur et à l'encoche ; un doigt n'y dépose rien.
+
+Le couvercle se soulève quand le doigt approche, et le bloc rétrécit juste ce
+qu'il faut pour tenir dans le seau : c'est ce geste qui dit « pose-le ici »,
+sans un mot à lire.
 
 Le seau est dessiné en deux passes, avant et après les blocs, pour que le bloc
 plonge derrière la paroi avant. Une seule passe et il flottait par-dessus, ou
@@ -89,6 +91,10 @@ déplace : *tenir + secouer* suffit, sans mode à armer.
 
 **Un bloc = un corps rigide composé**, pas une chaîne de contraintes de soudure
 (molles et coûteuses). Séparer revient à détruire un corps et à en créer deux.
+
+**Le geste s'écoute sur la fenêtre, pas sur le canvas.** La capture de pointeur
+est capricieuse au doigt ; sans elle, un glisser qui passe au-dessus d'une barre
+d'interface perd ses mouvements en route et le lâcher ne tombe nulle part.
 
 **Glisser cinématique**, pas de `MouseConstraint` : un correcteur proportionnel
 impose la vitesse à chaque pas, ce qui garde des collisions correctes sans

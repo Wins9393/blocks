@@ -96,9 +96,13 @@ export class Game {
     this.handleResize();
     window.addEventListener('resize', this.handleResize);
     this.canvas.addEventListener('pointerdown', this.onPointerDown);
-    this.canvas.addEventListener('pointermove', this.onPointerMove);
-    this.canvas.addEventListener('pointerup', this.onPointerUp);
-    this.canvas.addEventListener('pointercancel', this.onPointerUp);
+    // Suite du geste écoutée sur la fenêtre, pas sur le canvas : la capture de
+    // pointeur est capricieuse au doigt, et sans elle un glisser qui passe
+    // au-dessus d'une barre d'interface perdait ses mouvements en route — le
+    // bloc restait figé et le lâcher ne tombait nulle part.
+    window.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerUp);
     this.canvas.addEventListener('pointerleave', this.onPointerLeave);
     window.addEventListener('pagehide', this.flush);
     window.addEventListener('blur', this.releaseEverything);
@@ -114,9 +118,9 @@ export class Game {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.handleResize);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-    this.canvas.removeEventListener('pointermove', this.onPointerMove);
-    this.canvas.removeEventListener('pointerup', this.onPointerUp);
-    this.canvas.removeEventListener('pointercancel', this.onPointerUp);
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerUp);
     this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
     window.removeEventListener('pagehide', this.flush);
     window.removeEventListener('blur', this.releaseEverything);

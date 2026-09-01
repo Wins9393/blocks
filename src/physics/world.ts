@@ -1,12 +1,5 @@
 import Matter from 'matter-js';
-import {
-  DRAG_MAX_SPIN,
-  DRAG_STRAIGHTEN,
-  GRAVITY_Y,
-  TRASH_W,
-  TRASH_Y,
-  UNIT,
-} from '../core/constants';
+import { DRAG_MAX_SPIN, DRAG_STRAIGHTEN, GRAVITY_Y, TRASH_W, UNIT } from '../core/constants';
 import { rectanglesFor, shapeFor } from '../core/shape';
 import type { Shape } from '../core/shape';
 
@@ -98,11 +91,11 @@ export class World {
     ];
     Composite.add(this.engine.world, this.walls);
 
-    // Centrée en haut : c'est la seule bande de scène qui reste vide, donc la
-    // corbeille n'y recouvre jamais une construction. Sa taille suit l'écran.
-    const tw = Math.round(Math.min(TRASH_W, Math.max(78, width * 0.24)));
+    // Posée au sol dans le coin, là où le pouce arrive sans lâcher le
+    // téléphone. Sa taille suit la largeur disponible.
+    const tw = Math.round(Math.min(TRASH_W, Math.max(76, width * 0.24)));
     const th = Math.round(tw * 0.86);
-    this.trash = { x: Math.round(width / 2), y: Math.min(TRASH_Y, this.groundY - th), w: tw, h: th };
+    this.trash = { x: Math.round(width - tw / 2 - 14), y: this.groundY - th / 2, w: tw, h: th };
   }
 
   add(value: number, x: number, y: number, angle = 0, velocity?: Matter.Vector, id?: number): Block {

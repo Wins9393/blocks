@@ -18,7 +18,7 @@ const HINTS: Hint[] = [
   { icon: '\u{1F91D}', label: 'Colle deux blocs' },
   { icon: '\u{1F91A}', label: 'Secoue pour détacher' },
   { icon: '✂️', label: 'Trace un trait pour couper' },
-  { icon: '\u{1F5D1}\uFE0F', label: 'Monte un bloc dans la corbeille pour le jeter' },
+  { icon: '\u{1F5D1}\uFE0F', label: 'Glisse un bloc dans la corbeille pour le jeter' },
 ];
 
 /**

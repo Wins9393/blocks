@@ -50,9 +50,10 @@ export const GROUND_HEIGHT = 26;
 // visible au-dessus : sans bande de sol, les blocs ont l'air de flotter.
 export const BOTTOM_SAFE = 178;
 /**
- * Corbeille : elle ne se montre que pendant un glisser, et flotte en haut de
- * la scène. Posée en permanence sur le sol, elle occupait un coin du terrain
- * et les blocs venaient s'empiler contre elle.
+ * Corbeille : elle ne se montre que pendant un glisser, et n'est plus un corps
+ * physique. C'est ça qui libère le terrain — pas sa position. Elle reste donc
+ * posée au sol, à portée de pouce : le haut d'un écran de téléphone est occupé
+ * par la barre du navigateur et l'encoche, et un doigt ne va pas y déposer
+ * quoi que ce soit.
  */
-export const TRASH_W = 112;
-export const TRASH_Y = 148;
+export const TRASH_W = 104;
