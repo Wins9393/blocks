@@ -940,9 +940,10 @@ button:disabled {
   pointer-events: none;
 }
 
-/* Six outils plus la pastille d'espace ne tiennent pas sur une largeur de
+/* Sept outils plus la pastille d'espace ne tiennent pas sur une largeur de
    telephone : le nom cede la place, la lettre coloree suffit a reconnaitre
-   l'espace et le menu redonne les noms en entier. */
+   l'espace et le menu redonne les noms en entier. Puis les outils maigrissent,
+   par paliers, plutot que de deborder de l'ecran. */
 @media (max-width: 430px) {
   .space-name {
     display: none;
@@ -951,9 +952,7 @@ button:disabled {
   .space-btn {
     padding: 5px;
   }
-}
 
-@media (max-width: 360px) {
   .icon-btn.small {
     width: 36px;
     height: 36px;
@@ -967,6 +966,33 @@ button:disabled {
 
   .topbar-tools {
     gap: 5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .icon-btn.small {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  .icon-btn.small svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .topbar-tools {
+    gap: 4px;
+  }
+
+  /* Sur le plus etroit des telephones, la pastille se passe de son chevron :
+     le menu s'ouvre aussi bien en touchant la lettre. */
+  .space-btn .chevron {
+    display: none;
+  }
+
+  .space-btn {
+    padding: 3px;
   }
 }
 

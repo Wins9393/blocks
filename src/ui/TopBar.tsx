@@ -7,6 +7,8 @@ interface Props {
   space: Space;
   state: GameState;
   muted: boolean;
+  relief: boolean;
+  onToggleRelief: () => void;
   onOpenSpaces: () => void;
   missionsOn: boolean;
   onToggleMissions: () => void;
@@ -25,6 +27,8 @@ export default function TopBar({
   space,
   state,
   muted,
+  relief,
+  onToggleRelief,
   onOpenSpaces,
   missionsOn,
   onToggleMissions,
@@ -66,6 +70,21 @@ export default function TopBar({
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M6 21V4h11l-1.6 3.4L17 11H6" />
+          </svg>
+        </button>
+
+        {/* Le cube dit ce qu'il fait : à plat il n'a qu'un contour, en volume
+            il montre ses trois faces. */}
+        <button
+          className={`icon-btn small ${relief ? 'allume' : ''}`}
+          onClick={onToggleRelief}
+          aria-pressed={relief}
+          aria-label={relief ? 'Revenir aux blocs dessinés' : 'Passer les blocs en volume'}
+          title={relief ? 'Blocs dessinés' : 'Blocs en volume'}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 20 7.2v9.6L12 21 4 16.8V7.2z" />
+            {relief && <path d="M4 7.2 12 11.6l8-4.4M12 11.6V21" />}
           </svg>
         </button>
 

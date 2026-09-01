@@ -81,6 +81,11 @@ export default function App() {
     savePrefs(prefs);
   }, [prefs]);
 
+  // Le relief se rallume au chargement comme il a été laissé.
+  useEffect(() => {
+    gameRef.current?.setRelief(prefs.relief);
+  }, [prefs.relief]);
+
   const closeHints = useCallback(() => {
     setHintsOpen(false);
     setPrefs((p) => (p.hintsSeen ? p : { ...p, hintsSeen: true }));
@@ -276,6 +281,8 @@ export default function App() {
         space={current}
         state={state}
         muted={prefs.muted}
+        relief={prefs.relief}
+        onToggleRelief={() => setPrefs((p) => ({ ...p, relief: !p.relief }))}
         onOpenSpaces={() => setMenuOpen(true)}
         missionsOn={progress.actif}
         onToggleMissions={() => {

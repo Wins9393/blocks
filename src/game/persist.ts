@@ -40,9 +40,11 @@ export interface SpaceBook {
 export interface Prefs {
   muted: boolean;
   hintsSeen: boolean;
+  /** Blocs et objets en volume plutôt qu'au trait. */
+  relief: boolean;
 }
 
-const DEFAULT_PREFS: Prefs = { muted: false, hintsSeen: false };
+const DEFAULT_PREFS: Prefs = { muted: false, hintsSeen: false, relief: false };
 
 function read<T>(key: string): T | null {
   try {

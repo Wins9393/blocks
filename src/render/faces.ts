@@ -96,19 +96,31 @@ const anime = (slot: string, id: string) => ANIMEES.has(`${slot}:${id}`);
 // --- assemblage -----------------------------------------------------------
 
 /** Ce qui passe derrière la tête, et qui bouge : la cape. */
-export function drawHeadBehind(ctx: CanvasRenderingContext2D, look: ResolvedLook, time: number) {
-  if (look.scarf === 'cape') drawCape(ctx, time);
+export function drawHeadBehind(
+  ctx: CanvasRenderingContext2D,
+  look: ResolvedLook,
+  time: number,
+  sansObjets = false,
+) {
+  if (look.scarf === 'cape' && !sansObjets) drawCape(ctx, time);
 }
 
 /**
  * Tout ce qui ne bouge jamais. Rien ici ne recouvre les yeux, ce qui permet
  * de le peindre une fois pour toutes et de le poser sous le regard.
  */
-export function drawHeadDecor(ctx: CanvasRenderingContext2D, look: ResolvedLook, base: string) {
+export function drawHeadDecor(
+  ctx: CanvasRenderingContext2D,
+  look: ResolvedLook,
+  base: string,
+  sansObjets = false,
+) {
   const ink = inkFor(base);
   drawHair(ctx, look.hair, ink);
-  if (look.hat !== 'rien' && !anime('hat', look.hat)) drawHat(ctx, look.hat, ink);
-  if (look.scarf !== 'rien' && !anime('scarf', look.scarf)) drawScarf(ctx, look.scarf);
+  // En relief, chapeaux, lunettes et pièces de cou sont modelés : on ne les
+  // dessine pas deux fois. La pilosité, elle, reste toujours au trait.
+  if (look.hat !== 'rien' && !anime('hat', look.hat) && !sansObjets) drawHat(ctx, look.hat, ink);
+  if (look.scarf !== 'rien' && !anime('scarf', look.scarf) && !sansObjets) drawScarf(ctx, look.scarf);
   if (look.cheeks === 'roses' || look.cheeks === 'deux') drawBlush(ctx);
   if (look.cheeks === 'taches' || look.cheeks === 'deux') drawFreckles(ctx, ink);
   // La barbe entoure la bouche : elle passe dessous, sinon elle l'avale.
@@ -125,11 +137,12 @@ export function drawHeadLive(
   base: string,
   pose: Pose,
   time: number,
+  sansObjets = false,
 ) {
   const ink = inkFor(base);
   drawEyes(ctx, look.eyes, ink, pose);
-  if (look.glasses !== 'rien') drawGlasses(ctx, look.glasses, ink, time);
-  if (look.hat !== 'rien' && anime('hat', look.hat)) drawAnimatedHat(ctx, look.hat, time);
+  if (look.glasses !== 'rien' && !sansObjets) drawGlasses(ctx, look.glasses, ink, time);
+  if (look.hat !== 'rien' && anime('hat', look.hat) && !sansObjets) drawAnimatedHat(ctx, look.hat, time);
 }
 
 /** La tête entière, au trait, centrée sur l'origine. */
@@ -178,8 +191,8 @@ export class DecorCache {
     this.images.clear();
   }
 
-  private image(look: ResolvedLook, base: string): HTMLCanvasElement {
-    const key = `${base}|${lookSignature(look)}`;
+  private image(look: ResolvedLook, base: string, sansObjets: boolean): HTMLCanvasElement {
+    const key = `${base}|${lookSignature(look)}|${sansObjets ? 'nu' : 'tout'}`;
     const hit = this.images.get(key);
     if (hit) return hit;
 
@@ -194,15 +207,15 @@ export class DecorCache {
       ctx.translate(DECOR_HALF_W, -DECOR_TOP);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      drawHeadDecor(ctx, look, base);
+      drawHeadDecor(ctx, look, base, sansObjets);
     }
     this.images.set(key, canvas);
     return canvas;
   }
 
-  draw(ctx: CanvasRenderingContext2D, look: ResolvedLook, base: string) {
+  draw(ctx: CanvasRenderingContext2D, look: ResolvedLook, base: string, sansObjets = false) {
     ctx.drawImage(
-      this.image(look, base),
+      this.image(look, base, sansObjets),
       -DECOR_HALF_W,
       DECOR_TOP,
       2 * DECOR_HALF_W,
@@ -217,6 +230,8 @@ export interface CharacterOptions {
   decor?: DecorCache;
   wardrobe?: Wardrobe;
   time?: number;
+  /** Le relief s'occupe des objets : ne dessine que le personnage. */
+  sansObjets?: boolean;
 }
 
 /**
@@ -229,7 +244,7 @@ export function drawCharacter(
   base: string,
   opts: CharacterOptions = {},
 ) {
-  const { pose = NEUTRAL, decor, wardrobe, time = 0 } = opts;
+  const { pose = NEUTRAL, decor, wardrobe, time = 0, sansObjets = false } = opts;
   const cells = centeredCells(value);
   const face = cells[shapeFor(value).faceIndex];
   const look = lookFor(value, wardrobe);
@@ -239,10 +254,10 @@ export function drawCharacter(
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  drawHeadBehind(ctx, look, time);
-  if (decor) decor.draw(ctx, look, base);
-  else drawHeadDecor(ctx, look, base);
-  drawHeadLive(ctx, look, base, pose, time);
+  drawHeadBehind(ctx, look, time, sansObjets);
+  if (decor) decor.draw(ctx, look, base, sansObjets);
+  else drawHeadDecor(ctx, look, base, sansObjets);
+  drawHeadLive(ctx, look, base, pose, time, sansObjets);
 
   ctx.restore();
 }

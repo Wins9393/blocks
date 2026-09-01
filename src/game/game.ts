@@ -316,6 +316,16 @@ export class Game {
     this.dirty = true;
   }
 
+  /**
+   * Bascule le rendu en volume. Rend `false` si la machine n'a pas de WebGL :
+   * l'appelant sait alors que le bouton n'a rien pu faire.
+   */
+  setRelief(on: boolean): boolean {
+    const actif = this.renderer.setRelief(on);
+    this.dirty = true;
+    return actif;
+  }
+
   /** La tenue des blocs de cet espace. */
   setWardrobe(wardrobe: Wardrobe) {
     this.renderer.setWardrobe(wardrobe);

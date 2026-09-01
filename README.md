@@ -93,6 +93,54 @@ Le seau est dessiné en deux passes, avant et après les blocs, pour que le bloc
 plonge derrière la paroi avant. Une seule passe et il flottait par-dessus, ou
 disparaissait sous le seau.
 
+**Les blocs et les objets passent en volume d'un bouton** (le cube dans la
+barre du haut). Le rendu WebGL ne remplace pas le moteur 2D, il s'y glisse :
+décor au canvas, puis les corps et ce qui se porte sous le visage, puis les
+visages au trait par-dessus, puis les chapeaux et les lunettes qui se posent
+dessus. Les deux passes WebGL partagent un seul tampon de profondeur — seule la
+couleur est effacée entre elles — et chaque bloc reçoit un z tiré de son ordre
+de dessin : le chapeau d'un bloc du fond passe donc derrière le bloc de devant,
+alors même qu'il est peint après lui.
+
+**La caméra est orthographique et de face**, et ce n'est pas un choix
+esthétique. En perspective, un bloc posé sur le bord montrerait sa tranche : son
+dessin ne coïnciderait plus avec sa forme de collision, et l'enfant vise ce
+qu'il voit. De face, le volume occupe *exactement* les mêmes pixels que le
+trait — un test le vérifie pour les cent valeurs — ce qui permet de poser le
+visage dessiné sur le corps modelé sans qu'il glisse d'un pixel.
+
+**Le bloc en volume est l'union des mêmes rectangles arrondis que le moteur 2D
+assemble déjà** : les cases, plus un pont partout où deux cases se touchent.
+C'est ce qui rend la silhouette identique par construction, ponts compris, sans
+recalculer de contour.
+
+**Les objets sont transcrits, pas réinventés.** Chaque pièce reprend les cotes
+de son dessin (`src/render/objets3d.ts`) : ce qui est plat de face est extrudé
+du tracé lui-même — découpe d'oreilles, donc étoile, cœur et oreille de chat
+sont justes au point près ; ce qui fait le tour de la tête devient un solide de
+révolution aplati, parce qu'un bloc est une dalle et non un cube ; et ce que le
+dessin montre en ellipse — un bord de chapeau, une auréole — est un anneau
+incliné de `asin(ry / rx)`, la vieille triche des jeux plats, qui rend la
+silhouette d'origine.
+
+**Seuls les objets passent en volume.** Cheveux, sourcils, bouches, moustaches,
+joues et yeux restent dessinés : le regard suit le doigt et les paupières
+clignent, ce qu'une texture ne saurait pas suivre sans être repeinte à chaque
+image. Deux tests tiennent ce partage — que toute pièce d'objet ait bien un
+modèle, et que la pilosité n'en ait pas.
+
+Un piège trouvé en mesurant : **tout ce que le dessin pose *sur* le bloc doit
+sortir de son épaisseur.** Écharpes, nœud papillon, médaille et foulard étaient
+modelés au milieu de la dalle — donc parfaitement invisibles. Ils sont
+maintenant plaqués juste devant, et les anneaux qui font le tour du cou sont
+aplatis juste ce qu'il faut pour ne pas s'y noyer.
+
+L'éclairage est volontairement doux : beaucoup d'ambiante, peu de spéculaire.
+La couleur d'un bloc dit quel nombre on regarde ; un éclairage de studio, plus
+joli sur un objet isolé, la ferait bouger avec l'orientation et brouillerait la
+lecture. Le tout coûte **0,2 ms par image** de plus que le trait, avec vingt
+blocs et dix accessoires à l'écran.
+
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre
 construction *et sa propre garde-robe* (`src/game/persist.ts`). Changer d'espace
 range la scène en cours sur son rayon avant de sortir l'autre.
@@ -225,7 +273,7 @@ chemin n'y mène, et ce serait une promesse qu'on ne tient pas.
 src/core/      formes canoniques, palette, vestiaire, missions, constantes — pur et testé
 src/physics/   adaptateur Matter.js : forme → corps composé
 src/input/     reconnaissance de gestes (secousse, coupe) — pur, testé
-src/render/    canvas 2D
+src/render/    canvas 2D, et le relief WebGL qui s'y glisse (mesh, objets3d, relief)
 src/audio/     synthèse sonore et voix
 src/game/      orchestration, boucle à pas fixe, sauvegarde
 src/ui/        React : barres, atelier, espaces et aide — rien de la scène
