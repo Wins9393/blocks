@@ -325,7 +325,14 @@ export class Forge {
     return this;
   }
 
-  /** Un trait épais du dessin 2D, transformé en ruban plein puis extrudé. */
+  /**
+   * Un trait épais du dessin 2D, épaissi puis extrudé.
+   *
+   * Fermé, il devient un **anneau** — deux contours reliés par leurs faces et
+   * leurs parois. Extruder chaque contour de son côté, comme on le faisait,
+   * donnait deux plaques pleines : une monture de lunettes sans trou, et le
+   * regard bouché.
+   */
   ruban(bruts: Pt[], largeur: number, z0: number, z1: number, ferme = false) {
     const points = nettoie(bruts);
     if (points.length < 2) return this;
@@ -334,18 +341,32 @@ export class Forge {
     const n = points.length;
     for (let i = 0; i < n; i++) {
       const p = points[i];
-      const a = points[Math.max(0, i - 1)];
-      const b = points[Math.min(n - 1, i + 1)];
+      const a = ferme ? points[(i - 1 + n) % n] : points[Math.max(0, i - 1)];
+      const b = ferme ? points[(i + 1) % n] : points[Math.min(n - 1, i + 1)];
       const t = norme([b[0] - a[0], b[1] - a[1], 0]);
       gauche.push([p[0] - t[1] * d, p[1] + t[0] * d]);
       droite.push([p[0] + t[1] * d, p[1] - t[0] * d]);
     }
-    if (ferme) {
-      this.extrude(gauche, z0, z1);
-      this.extrude(droite.reverse(), z0, z1);
-      return this;
+    if (!ferme) return this.extrude([...gauche, ...droite.reverse()], z0, z1);
+
+    const avant: Vec3 = [0, 0, 1];
+    const arriere: Vec3 = [0, 0, -1];
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ge: Pt = gauche[i], gf: Pt = gauche[j];
+      const de: Pt = droite[i], df: Pt = droite[j];
+      const A: Vec3 = [ge[0], ge[1], z1], B: Vec3 = [gf[0], gf[1], z1];
+      const C: Vec3 = [df[0], df[1], z1], D: Vec3 = [de[0], de[1], z1];
+      const A0: Vec3 = [ge[0], ge[1], z0], B0: Vec3 = [gf[0], gf[1], z0];
+      const C0: Vec3 = [df[0], df[1], z0], D0: Vec3 = [de[0], de[1], z0];
+      this.quad(A, B, C, D, avant, avant, avant, avant);
+      this.quad(D0, C0, B0, A0, arriere, arriere, arriere, arriere);
+      const ne = norme([gf[1] - ge[1], -(gf[0] - ge[0]), 0]);
+      this.quad(A0, B0, B, A, ne, ne, ne, ne);
+      const ni = norme([-(df[1] - de[1]), df[0] - de[0], 0]);
+      this.quad(D0, D, C, C0, ni, ni, ni, ni);
     }
-    return this.extrude([...gauche, ...droite.reverse()], z0, z1);
+    return this;
   }
 
   /**

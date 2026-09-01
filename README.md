@@ -170,6 +170,18 @@ moteur, avec un œil à distance fixe — une vignette de cent pixels ne doit pa
 fuir comme un grand-angle. Le moteur des vignettes a son propre contexte pour
 ne pas déranger celui de la scène.
 
+**Une monture fermée est un anneau, pas une plaque.** Le ruban qui suit un
+tracé fermé était extrudé contour par contour : deux plaques pleines, donc des
+lunettes carrées sans verre et un regard bouché — c'est ce qui donnait
+l'impression que les yeux avaient cessé de suivre le doigt. Un test vérifie
+qu'aucune monture ne couvre l'œil, le cache-œil excepté.
+
+**L'éclairage est recto-verso, réglé sur le regard et non sur l'enroulement des
+triangles.** La face arrière d'un verre gardait sa normale à l'opposé de la
+caméra : son terme de bord montait à 1, et le verre devenait un carreau opaque.
+Et un verre couvre d'autant plus qu'il est sombre — sans quoi les lunettes de
+soleil laissent voir les yeux comme une paire de lunettes de vue.
+
 **Deux réglages du rendu se paient cher si on les rate.** Le contexte WebGL est
 déclaré en **alpha prémultiplié** : avec l'anticrénelage, un pixel de bord sort
 déjà multiplié par sa couverture, et annoncer le contraire fait redividiser le

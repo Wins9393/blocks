@@ -75,8 +75,12 @@ vec3 ciel(vec3 d) {
 }
 void main() {
   vec3 N = normalize(vN);
-  if (!gl_FrontFacing) N = -N;
   vec3 V = normalize(uOeil - vP);
+  // Éclairage recto-verso : on retourne la normale d'après le regard, pas
+  // d'après l'enroulement du triangle. La face arrière d'un verre gardait
+  // sinon une normale à l'opposé, son terme de bord montait à 1 et la
+  // monture devenait un carreau plein.
+  if (dot(N, V) < 0.0) N = -N;
   vec3 L = normalize(vec3(-0.6, -0.8, 0.62));
   vec3 H = normalize(L + V);
   float diff = max(dot(N, L), 0.0);
@@ -95,9 +99,12 @@ void main() {
     // Métal : il n'existe que par ce qu'il reflète.
     c = vCol * (0.2 + 0.42 * diff) + vCol * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
   } else if (vMat < 2.5) {
-    // Verre : transparent sur la face, opaque de biais.
+    // Verre : transparent sur la face, opaque de biais — et d'autant plus
+    // couvrant qu'il est sombre. Sans cette part-là, les lunettes de soleil
+    // laissaient voir les yeux comme une paire de lunettes de vue.
+    float teinte = 1.0 - dot(vCol, vec3(0.3, 0.6, 0.1));
     c = mix(refl, vCol * 0.7, 0.4) + vec3(1.0) * spec * 1.5 + vCol * bord * 0.5;
-    alpha = clamp(0.26 + bord * 0.6 + spec, 0.0, 1.0);
+    alpha = clamp(0.18 + teinte * 0.5 + bord * 0.5 + spec, 0.0, 1.0);
   } else if (vMat < 3.5) {
     // Lumière : l'auréole ne s'éteint jamais.
     c = vCol * (0.9 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;

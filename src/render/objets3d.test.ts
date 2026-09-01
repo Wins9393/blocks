@@ -34,6 +34,21 @@ function verifie(m: Maille, quoi: string) {
   expect(defaut(m), quoi).toBe(null);
 }
 
+/** Le point est-il dans le triangle, vu de face ? */
+function dansTriangle(
+  p: [number, number],
+  a: [number, number],
+  b: [number, number],
+  c: [number, number],
+): boolean {
+  const cote = (u: [number, number], v: [number, number], w: [number, number]) =>
+    (u[0] - w[0]) * (v[1] - w[1]) - (v[0] - w[0]) * (u[1] - w[1]);
+  const d1 = cote(p, a, b);
+  const d2 = cote(p, b, c);
+  const d3 = cote(p, c, a);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
 describe('les objets en volume', () => {
   it('modélise toutes les pièces des emplacements repris en volume', () => {
     // La promesse est simple : si une pièce sort du dessin, elle doit exister
@@ -63,6 +78,29 @@ describe('les objets en volume', () => {
     // c'est le partage qui rend l'affaire tenable.
     const dessines = SLOTS.map((s) => s.key).filter((k) => !SLOTS_OBJETS.includes(k as never));
     expect(dessines.sort()).toEqual(['brows', 'cheeks', 'eyes', 'hair', 'mouth', 'stache']);
+  });
+
+  it('laisse le regard passer à travers les montures', () => {
+    // Une monture fermée doit être un anneau, pas une plaque : extrudée de
+    // travers, elle bouchait l'œil — et le regard qui suit le doigt avec.
+    // Le cache-œil est le seul à couvrir, et c'est son métier.
+    const U = UNIT;
+    const oeil: Array<[number, number]> = [
+      [-U * 0.21, -U * 0.07],
+      [U * 0.21, -U * 0.07],
+    ];
+    for (const piece of slotFor('glasses').pieces) {
+      if (piece.id === 'rien' || piece.id === 'cache') continue;
+      const m = forge(objet3D('glasses', piece.id)?.corps);
+      for (const [px, py] of oeil) {
+        let couvert = 0;
+        for (let i = 0; i < m.nb; i += 3) {
+          const p = (k: number): [number, number] => [m.pos[(i + k) * 3], m.pos[(i + k) * 3 + 1]];
+          if (dansTriangle([px, py], p(0), p(1), p(2))) couvert++;
+        }
+        expect(couvert, `glasses:${piece.id} bouche l'œil`).toBe(0);
+      }
+    }
   });
 
   it('donne une pièce mobile à celles qui bougent', () => {
