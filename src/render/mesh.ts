@@ -466,9 +466,12 @@ export class Forge {
       for (let j = 0; j + 1 < n; j++) {
         const [r0, y0] = profil[j];
         const [r1, y1] = profil[j + 1];
-        // Normale du profil, tournée avec lui.
+        // Normale du profil, tournée avec lui — et retournée vers l'extérieur
+        // si le profil monte : sans ça, un cylindre décrit de bas en haut
+        // s'éclaire par l'intérieur et ressort tout noir.
         const dr = r1 - r0, dy = y1 - y0;
-        const pn = norme([dy, -dr, 0]);
+        let pn = norme([dy, -dr, 0]);
+        if (pn[0] < 0) pn = [-pn[0], -pn[1], -pn[2]];
         const pt = (a: number, r: number, y: number): { p: Vec3; n: Vec3 } => ({
           p: [Math.cos(a) * r, y, Math.sin(a) * r * aplati],
           // Aplatir en z incline les normales : sans la division, la lumière

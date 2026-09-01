@@ -152,13 +152,14 @@ export function drawHead(
   base: string,
   pose: Pose = NEUTRAL,
   time = 0,
+  sansObjets = false,
 ) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  drawHeadBehind(ctx, look, time);
-  drawHeadDecor(ctx, look, base);
-  drawHeadLive(ctx, look, base, pose, time);
+  drawHeadBehind(ctx, look, time, sansObjets);
+  drawHeadDecor(ctx, look, base, sansObjets);
+  drawHeadLive(ctx, look, base, pose, time, sansObjets);
   ctx.restore();
 }
 

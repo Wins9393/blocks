@@ -24,7 +24,7 @@ import { UNIT } from '../core/constants';
 import { colorFor } from '../core/palette';
 import { centeredCells, shapeFor } from '../core/shape';
 import { lookFor } from '../core/wardrobe';
-import type { Wardrobe } from '../core/wardrobe';
+import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { Forge, MAT_MAT, teinte } from './mesh';
 import type { Maille } from './mesh';
 import { Z, objet3D } from './objets3d';
@@ -70,9 +70,9 @@ varying float vMat;
 uniform vec3 uOeil;
 vec3 ciel(vec3 d) {
   float t = clamp(-d.y * 0.5 + 0.5, 0.0, 1.0);
-  vec3 c = mix(vec3(0.05, 0.06, 0.09), vec3(0.40, 0.46, 0.63), t);
+  vec3 c = mix(vec3(0.09, 0.11, 0.15), vec3(0.52, 0.58, 0.74), t);
   float lampe = pow(max(dot(d, normalize(vec3(-0.5, -0.76, 0.42))), 0.0), 24.0);
-  return c + vec3(1.0, 0.93, 0.74) * lampe * 1.6;
+  return c + vec3(1.0, 0.93, 0.74) * lampe * 1.8;
 }
 void main() {
   vec3 N = normalize(vN);
@@ -86,22 +86,25 @@ void main() {
   vec3 refl = ciel(reflect(-V, N));
   vec3 c;
   float alpha = 1.0;
+  // Une lampe d'appoint, sans ombre, du côté opposé : elle relève les faces
+  // que la clé laisse dans le noir, comme le dégradé du dessin 2D le faisait.
+  float appoint = max(dot(N, normalize(vec3(0.5, -0.3, 0.8))), 0.0) * 0.22;
   if (vMat < 0.5) {
     // Mat : plastique, laine, feutre.
-    c = vCol * (0.56 + 0.46 * diff) + vCol * refl * 0.13 + vec3(1.0) * spec * 0.14 + vCol * bord * 0.26;
+    c = vCol * (0.7 + 0.5 * diff + appoint) + vCol * refl * 0.18 + vec3(1.0) * spec * 0.2 + vCol * bord * 0.3;
   } else if (vMat < 1.5) {
     // Métal : il n'existe que par ce qu'il reflète.
-    c = vCol * (0.2 + 0.42 * diff) + vCol * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
+    c = vCol * (0.3 + 0.5 * diff + appoint) + vCol * refl * 1.25 + vec3(1.0, 0.96, 0.86) * spec * 0.9;
   } else if (vMat < 2.5) {
     // Verre : transparent sur la face, opaque de biais.
-    c = mix(refl, vCol * 0.7, 0.4) + vec3(1.0) * spec * 1.5 + vCol * bord * 0.5;
+    c = mix(refl, vCol * 0.8, 0.4) + vec3(1.0) * spec * 1.6 + vCol * bord * 0.55;
     alpha = clamp(0.26 + bord * 0.6 + spec, 0.0, 1.0);
   } else if (vMat < 3.5) {
     // Lumière : l'auréole ne s'éteint jamais.
-    c = vCol * (0.9 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;
+    c = vCol * (0.95 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;
   } else {
     // Gemme.
-    c = vCol * (0.24 + 0.7 * diff) + refl * 0.3 + vec3(1.0) * spec * 1.4 + vCol * bord * 0.7;
+    c = vCol * (0.34 + 0.75 * diff + appoint) + refl * 0.32 + vec3(1.0) * spec * 1.5 + vCol * bord * 0.7;
   }
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), alpha);
 }`;
@@ -124,6 +127,8 @@ export interface BlocRelief {
   /** Rang de dessin : il devient la profondeur. */
   rang: number;
   dragged: boolean;
+  /** Tenue imposée, pour les vignettes qui essaient une pièce. */
+  look?: ResolvedLook;
 }
 
 /**
@@ -139,10 +144,10 @@ const EPAISSEUR_NDC = 0.004;
 /**
  * Recul de l'œil, en multiples du plus grand côté de l'écran. Plus court, la
  * fuite devient franche mais les blocs du bord se tordent ; plus long, on
- * retombe sur une vue à plat. Un écran de hauteur `h` regardé de `h` : les
- * blocs des bords montrent leur tranche sans que le milieu se déforme.
+ * retombe sur une vue à plat. À quatre cinquièmes de la hauteur, les blocs des
+ * bords montrent nettement leur tranche sans que le milieu se déforme.
  */
-const RECUL = 1.0;
+const RECUL = 0.82;
 
 export class Relief {
   readonly canvas: HTMLCanvasElement;
@@ -155,7 +160,11 @@ export class Relief {
   private largeur = 0;
   private hauteur = 0;
 
-  constructor() {
+  /**
+   * `reculFixe` sert aux vignettes : leur boîte fait cent pixels, et une
+   * distance d'œil proportionnelle y donnerait une fuite de grand-angle.
+   */
+  constructor(private reculFixe?: number) {
     this.canvas = document.createElement('canvas');
     const gl =
       (this.canvas.getContext('webgl', {
@@ -266,7 +275,7 @@ export class Relief {
 
   /** Distance de l'œil au plan médian de la scène, en pixels. */
   private get oeilZ(): number {
-    return Math.max(this.largeur, this.hauteur, 320) * RECUL;
+    return this.reculFixe ?? Math.max(this.largeur, this.hauteur, 320) * RECUL;
   }
 
   /**
@@ -338,7 +347,7 @@ export class Relief {
     for (const b of blocs) {
       const { modele, normale, biais } = this.repere(b);
       this.dessine(this.bloc(b.value), modele, normale, biais);
-      const look = lookFor(b.value, this.wardrobe);
+      const look = b.look ?? lookFor(b.value, this.wardrobe);
       const tete = this.tete(b, modele);
       if (look.scarf !== 'rien') {
         this.dessine(this.piece('scarf', look.scarf, 'corps'), tete, normale, biais);
@@ -365,7 +374,7 @@ export class Relief {
     for (const b of blocs) {
       const { modele, normale, biais } = this.repere(b);
       const tete = this.tete(b, modele);
-      const look = lookFor(b.value, this.wardrobe);
+      const look = b.look ?? lookFor(b.value, this.wardrobe);
       for (const slot of ['hat', 'glasses'] as const) {
         const id = look[slot];
         if (id === 'rien') continue;

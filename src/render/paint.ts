@@ -2,6 +2,7 @@ import { UNIT } from '../core/constants';
 import { shade } from '../core/palette';
 import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { drawCharacter, drawHead } from './faces';
+import { Relief } from './relief';
 import { CORNER, blockArt } from './silhouette';
 import type { BlockArt } from './silhouette';
 
@@ -170,6 +171,20 @@ const OVER_BOTTOM = UNIT * 0.06;
  * boîte. Sert aux boutons de la barre : le 10 y garde sa silhouette de 2 x 5,
  * ce qui est déjà la moitié de la leçon.
  */
+/** Où poser un bloc pour qu'il tienne dans une boîte, avec ses débordements. */
+function cadre(art: BlockArt, boxW: number, boxH: number) {
+  const left = art.left - OVER_SIDE;
+  const right = art.right + OVER_SIDE;
+  const top = art.top - OVER_TOP;
+  const bottom = art.bottom + OVER_BOTTOM;
+  const scale = Math.min(boxW / (right - left), boxH / (bottom - top));
+  return {
+    scale,
+    x: boxW / 2 - (scale * (left + right)) / 2,
+    y: boxH / 2 - (scale * (top + bottom)) / 2,
+  };
+}
+
 export function drawBlockThumb(
   ctx: CanvasRenderingContext2D,
   value: number,
@@ -179,14 +194,10 @@ export function drawBlockThumb(
   wardrobe?: Wardrobe,
 ) {
   const art = blockArt(value);
-  const left = art.left - OVER_SIDE;
-  const right = art.right + OVER_SIDE;
-  const top = art.top - OVER_TOP;
-  const bottom = art.bottom + OVER_BOTTOM;
-  const scale = Math.min(boxW / (right - left), boxH / (bottom - top));
+  const { scale, x, y } = cadre(art, boxW, boxH);
 
   ctx.save();
-  ctx.translate(boxW / 2 - (scale * (left + right)) / 2, boxH / 2 - (scale * (top + bottom)) / 2);
+  ctx.translate(x, y);
   ctx.scale(scale, scale);
   paintBody(ctx, art, blockPaints(ctx, art, base, 0));
   paintSeams(ctx, art, 0);
@@ -195,10 +206,110 @@ export function drawBlockThumb(
 }
 
 /**
+ * Le moteur de relief des vignettes : son propre contexte, pour ne pas
+ * déranger celui de la scène, et un œil à distance fixe — une vignette de cent
+ * pixels ne doit pas fuir comme un grand-angle.
+ */
+let atelier3D: Relief | null = null;
+
+function reliefVignette(): Relief | null {
+  if (!atelier3D) atelier3D = new Relief(1100);
+  return atelier3D.disponible ? atelier3D : null;
+}
+
+/**
+ * Une vignette en volume, montée comme la scène : le corps, puis le visage au
+ * trait sur la face avant, puis les objets par-dessus. Rend `false` si la
+ * machine n'a pas de WebGL — l'appelant retombe alors sur le dessin.
+ */
+function vignetteRelief(
+  ctx: CanvasRenderingContext2D,
+  value: number,
+  base: string,
+  boxW: number,
+  boxH: number,
+  dpr: number,
+  tete: (ctx: CanvasRenderingContext2D) => void,
+  look?: ResolvedLook,
+  wardrobe?: Wardrobe,
+): boolean {
+  const relief = reliefVignette();
+  if (!relief) return false;
+  const art = blockArt(value);
+  const { scale, x, y } = cadre(art, boxW, boxH);
+  relief.setWardrobe(wardrobe ?? {});
+  relief.resize(boxW, boxH, dpr);
+
+  const bloc = { value, x, y, angle: 0, sx: scale, sy: scale, rang: 0, dragged: false, look };
+  const corps = relief.passeCorps([bloc], 0);
+  if (corps) ctx.drawImage(corps, 0, 0, boxW, boxH);
+
+  // Le visage suit la face avant, comme dans la scène.
+  const k = relief.avantPlan;
+  ctx.save();
+  ctx.translate(boxW / 2 + (x - boxW / 2) * k, boxH / 2 + (y - boxH / 2) * k);
+  ctx.scale(scale * k, scale * k);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  paintSeams(ctx, art, 0);
+  tete(ctx);
+  ctx.restore();
+
+  const objets = relief.passeObjets([bloc], 0);
+  if (objets) ctx.drawImage(objets, 0, 0, boxW, boxH);
+  void base;
+  return true;
+}
+
+/** Le bloc entier en volume, personnage compris. */
+export function drawBlockThumb3D(
+  ctx: CanvasRenderingContext2D,
+  value: number,
+  base: string,
+  boxW: number,
+  boxH: number,
+  dpr: number,
+  wardrobe?: Wardrobe,
+): boolean {
+  return vignetteRelief(
+    ctx,
+    value,
+    base,
+    boxW,
+    boxH,
+    dpr,
+    (c) => drawCharacter(c, value, base, { wardrobe, sansObjets: true }),
+    undefined,
+    wardrobe,
+  );
+}
+
+/**
  * Une tête seule sur son cube, au plus grand possible. L'atelier montre ainsi
  * chaque pièce à une taille où on la distingue : dans la silhouette entière
  * d'un 10, un sourcil fait deux pixels.
  */
+/** Une tête seule en volume : l'essayage d'une pièce dans l'atelier. */
+export function drawFaceThumb3D(
+  ctx: CanvasRenderingContext2D,
+  base: string,
+  look: ResolvedLook,
+  boxW: number,
+  boxH: number,
+  dpr: number,
+): boolean {
+  return vignetteRelief(
+    ctx,
+    1,
+    base,
+    boxW,
+    boxH,
+    dpr,
+    (c) => drawHead(c, look, base, undefined, 0, true),
+    look,
+  );
+}
+
 export function drawFaceThumb(
   ctx: CanvasRenderingContext2D,
   base: string,

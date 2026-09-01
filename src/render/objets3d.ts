@@ -7,12 +7,16 @@
  *
  * - ce qui est *plat de face* dans le dessin (étoile, cœur, oreille de chat)
  *   est extrudé du tracé lui-même, découpé en oreilles ;
- * - ce qui est *rond autour de la tête* (dômes, bandeaux, bords de chapeau)
- *   devient un solide de révolution aplati de `PROF` en profondeur, parce que
- *   la tête est une dalle et non un cube ;
- * - ce que le dessin montre en ellipse (un bord de chapeau, une auréole) est
- *   un anneau **incliné de `asin(ry / rx)`**. C'est la triche des jeux en deux
- *   dimensions, et elle rend au pixel près la silhouette d'origine.
+ * - ce qui coiffe la tête (dômes, cônes, calottes) devient un solide de
+ *   révolution assez **profond pour envelopper la dalle** — moins profond, sa
+ *   partie basse passerait derrière la face avant du bloc et le chapeau se
+ *   mettrait à flotter ;
+ * - ce que le dessin étale en bande sur la tête (bord de chapeau, bandeau,
+ *   écharpe) devient une **plaque posée devant la dalle** : l'anneau serait
+ *   plus juste, mais sur vingt-trois pixels d'épaisseur il ne montre qu'un arc
+ *   deux fois plus étroit que la tête ;
+ * - et ce que le dessin montre en ellipse pour dire l'horizontale — l'auréole —
+ *   est un anneau **incliné de `asin(ry / rx)`**.
  *
  * Les pièces qui ne sont pas des objets — cheveux, sourcils, bouches,
  * moustaches, joues — restent dessinées : c'est le partage qui rend la chose
@@ -27,6 +31,7 @@ import {
   MAT_MAT,
   MAT_METAL,
   MAT_VERRE,
+  arc,
   coeurPts,
   etoile,
   quadratique,
@@ -43,8 +48,6 @@ const NECK = U * 0.42;
 
 /** Demi-épaisseur d'un bloc : c'est une dalle, pas un cube. */
 export const Z = U * 0.32;
-/** Rapport profondeur/largeur des objets qui font le tour de la tête. */
-const PROF = Z / (U * 0.5);
 /**
  * Le devant de la dalle, plus un cheveu.
  *
@@ -54,8 +57,36 @@ const PROF = Z / (U * 0.5);
  */
 const DEVANT = Z + U * 0.02;
 
-/** Aplatissement d'un anneau qui fait le tour de la dalle sans s'y noyer. */
-const autour = (R: number) => Math.min(1, (Z + U * 0.05) / R);
+/**
+ * Étirement d'un anneau pour qu'il fasse *vraiment* le tour de la dalle.
+ *
+ * Un anneau plus étroit que l'épaisseur du bloc passe derrière sa face avant :
+ * de face, il disparaît sous la tête au lieu de la ceindre. On ne l'étire donc
+ * que s'il en a besoin — un grand anneau reste rond.
+ */
+const autour = (R: number) => Math.max(1, (Z + U * 0.09) / R);
+
+/**
+ * Demi-profondeur de tout ce qui se pose sur la tête.
+ *
+ * C'est la correction qui remet les chapeaux sur le crâne : un dôme moins
+ * profond que la dalle voit sa partie basse — celle qui coiffe justement la
+ * tête — masquée par la face avant du bloc, et le chapeau se met à flotter.
+ */
+const PROF_TETE = Z + U * 0.05;
+
+/**
+ * Les bandes du dessin — bords de chapeau, bandeaux, écharpes — deviennent des
+ * **plaques posées devant la dalle**, et non des anneaux qui l'entourent.
+ *
+ * L'anneau est plus juste physiquement, mais il ne montre que son arc avant :
+ * sur une dalle de vingt-trois pixels d'épaisseur, cet arc est deux fois plus
+ * étroit que la tête, et le chapeau se met à flotter. La plaque, elle, rend
+ * exactement le tracé d'origine, garde son épaisseur et sa lumière propre.
+ */
+function plaque(f: Forge, contour: Pt[], epaisseur = U * 0.05, avance = 0) {
+  f.extrude(contour, DEVANT + avance, DEVANT + avance + epaisseur);
+}
 
 const OR = teinte('#FFD75E');
 const OR_OMBRE = teinte('#BF8C1C');
@@ -120,11 +151,12 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
         const a0 = t0 * Math.PI * 2, a1 = t1 * Math.PI * 2;
         const s0: Pt = [Math.sin(a0), Math.cos(a0)], s1: Pt = [Math.sin(a1), Math.cos(a1)];
         const y0 = haut(t0), y1 = haut(t1);
-        const pe = (s: Pt, y: number, k: number): [number, number, number] => [s[0] * R * k, y, s[1] * R * PROF * k];
-        const n0: [number, number, number] = [s0[0], 0, s0[1] / PROF];
-        const n1: [number, number, number] = [s1[0], 0, s1[1] / PROF];
-        const d0: [number, number, number] = [-s0[0], 0, -s0[1] / PROF];
-        const d1: [number, number, number] = [-s1[0], 0, -s1[1] / PROF];
+        const cerne = autour(R);
+        const pe = (s: Pt, y: number, k: number): [number, number, number] => [s[0] * R * k, y, s[1] * R * cerne * k];
+        const n0: [number, number, number] = [s0[0], 0, s0[1] / cerne];
+        const n1: [number, number, number] = [s1[0], 0, s1[1] / cerne];
+        const d0: [number, number, number] = [-s0[0], 0, -s0[1] / cerne];
+        const d1: [number, number, number] = [-s1[0], 0, -s1[1] / cerne];
         const ri = 1 - ep / R;
         f.quad(pe(s0, base, 1), pe(s1, base, 1), pe(s1, y1, 1), pe(s0, y0, 1), n0, n1, n1, n0);
         f.quad(pe(s1, base, ri), pe(s0, base, ri), pe(s0, y0, ri), pe(s1, y1, ri), d1, d0, d0, d1);
@@ -136,7 +168,7 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
       // Les trois gemmes du bandeau, aux mêmes abscisses que dans le dessin.
       for (const [i, c] of [ROUGE, CIEL, FEUILLE].entries()) {
         const x = (i - 1) * U * 0.22;
-        const dz = Math.sqrt(Math.max(0, 1 - (x / R) ** 2)) * R * PROF;
+        const dz = Math.sqrt(Math.max(0, 1 - (x / R) ** 2)) * R * autour(R);
         f.peint(c, MAT_GEMME).save();
         f.translate(x, base - U * 0.045, dz);
         f.sphere([U * 0.045, U * 0.045, U * 0.045], 1, 14, 10);
@@ -157,11 +189,8 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
   plume: {
     corps(f) {
       // Le bandeau : ce que le dessin montre en barrette est un anneau.
-      f.peint(BOIS, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.035, 0);
-      f.rotateX(penche(U * 0.44, U * 0.065));
-      f.tore(U * 0.44, U * 0.065, Math.PI * 2, 36, 10, autour(U * 0.44));
-      f.restore();
+      f.peint(BOIS, MAT_MAT);
+      plaque(f, rectArrondi(-U * 0.44, TOP - U * 0.03, U * 0.88, U * 0.13, U * 0.06), U * 0.06);
 
       const pointe: Pt = [U * 0.48, TOP - U * 0.26];
       const gauche: Pt = [U * 0.26, TOP + U * 0.14];
@@ -190,25 +219,11 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
     corps(f) {
       f.peint(DENIM, MAT_MAT).save();
       f.translate(0, TOP + U * 0.04, 0);
-      f.sphere([U * 0.36, U * 0.26, U * 0.36 * PROF], 0.5, 26, 12);
+      f.sphere([U * 0.36, U * 0.26, PROF_TETE], 0.5, 26, 12);
       f.restore();
       // La visière part sur le côté, comme dans le dessin.
-      f.peint(DENIM_OMBRE, MAT_MAT).save();
-      f.translate(U * 0.16, TOP + U * 0.03, 0);
-      f.rotateX(penche(U * 0.3, U * 0.08));
-      f.rotateZ(-0.1);
-      f.revolution(
-        [
-          [0, -U * 0.018],
-          [U * 0.3, -U * 0.012],
-          [U * 0.3, U * 0.012],
-          [0, U * 0.018],
-        ],
-        26,
-        true,
-        1,
-      );
-      f.restore();
+      f.peint(DENIM_OMBRE, MAT_MAT);
+      plaque(f, arc(U * 0.34, TOP + U * 0.03, U * 0.3, U * 0.08, 0, Math.PI * 2, 28), U * 0.05);
       f.peint(DENIM_OMBRE, MAT_MAT).save();
       f.translate(0, TOP - U * 0.22, 0);
       f.sphere([U * 0.04, U * 0.04, U * 0.04], 1, 12, 8);
@@ -220,13 +235,11 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
     corps(f) {
       f.peint(LAINE, MAT_MAT).save();
       f.translate(0, TOP + U * 0.01, 0);
-      f.sphere([U * 0.34, U * 0.27, U * 0.34 * PROF], 0.5, 26, 12);
+      f.sphere([U * 0.34, U * 0.27, PROF_TETE], 0.5, 26, 12);
       f.restore();
       // Le revers roulé : un bourrelet, pas une barrette.
-      f.peint(LAINE_OMBRE, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.01, 0);
-      f.tore(U * 0.33, U * 0.07, Math.PI * 2, 34, 10, PROF);
-      f.restore();
+      f.peint(LAINE_OMBRE, MAT_MAT);
+      plaque(f, rectArrondi(-U * 0.4, TOP - U * 0.06, U * 0.8, U * 0.14, U * 0.07), U * 0.06);
       f.peint(CREME, MAT_MAT).save();
       f.translate(0, TOP - U * 0.3, 0);
       f.sphere([U * 0.1, U * 0.1, U * 0.1], 1, 16, 12);
@@ -252,11 +265,11 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
           ],
           26,
           false,
-          PROF,
+          PROF_TETE / R,
         );
       }
       f.peint(JAUNE_OMBRE, MAT_MAT);
-      f.revolution([[0, base], [R, base]], 26, false, PROF);
+      f.revolution([[0, base], [R, base]], 26, false, PROF_TETE / R);
       f.peint(BLANC, MAT_MAT).save();
       f.translate(0, TOP - U * 0.38, 0);
       f.sphere([U * 0.08, U * 0.08, U * 0.08], 1, 16, 12);
@@ -266,21 +279,8 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
 
   sorcier: {
     corps(f) {
-      f.peint(NUIT_OMBRE, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.04, 0);
-      f.rotateX(penche(U * 0.52, U * 0.1));
-      f.revolution(
-        [
-          [0, -U * 0.022],
-          [U * 0.52, -U * 0.014],
-          [U * 0.52, U * 0.014],
-          [0, U * 0.022],
-        ],
-        30,
-        true,
-        1,
-      );
-      f.restore();
+      f.peint(NUIT_OMBRE, MAT_MAT);
+      plaque(f, arc(0, TOP + U * 0.04, U * 0.52, U * 0.1, 0, Math.PI * 2, 34), U * 0.055);
       // La pointe ploie : on suit la même courbe que le tracé 2D, en cônes.
       f.peint(NUIT, MAT_MAT);
       const axe: Pt[] = [
@@ -305,21 +305,8 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
 
   hautForme: {
     corps(f) {
-      f.peint(NOIR, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.03, 0);
-      f.rotateX(penche(U * 0.46, U * 0.09));
-      f.revolution(
-        [
-          [0, -U * 0.02],
-          [U * 0.46, -U * 0.012],
-          [U * 0.46, U * 0.012],
-          [0, U * 0.02],
-        ],
-        30,
-        true,
-        1,
-      );
-      f.restore();
+      f.peint(NOIR, MAT_MAT);
+      plaque(f, arc(0, TOP + U * 0.03, U * 0.46, U * 0.09, 0, Math.PI * 2, 34), U * 0.05);
       f.peint(NOIR_CLAIR, MAT_MAT);
       f.revolution(
         [
@@ -330,18 +317,12 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
         ],
         30,
         false,
-        PROF,
+        PROF_TETE / (U * 0.26),
       );
+      // Le ruban passe devant la calotte : à son rayon exact, les deux surfaces
+      // se disputaient le même pixel.
       f.peint(ROUGE, MAT_MAT);
-      f.revolution(
-        [
-          [U * 0.265, TOP - U * 0.09],
-          [U * 0.265, TOP + U * 0.01],
-        ],
-        30,
-        false,
-        PROF,
-      );
+      plaque(f, rectArrondi(-U * 0.26, TOP - U * 0.09, U * 0.52, U * 0.1, U * 0.02), U * 0.04, U * 0.07);
     },
   },
 
@@ -349,12 +330,10 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
     corps(f) {
       f.peint(METAL, MAT_METAL).save();
       f.translate(0, TOP + U * 0.05, 0);
-      f.sphere([U * 0.33, U * 0.27, U * 0.33 * PROF], 0.5, 26, 12);
+      f.sphere([U * 0.33, U * 0.27, PROF_TETE], 0.5, 26, 12);
       f.restore();
-      f.peint(METAL_OMBRE, MAT_METAL).save();
-      f.translate(0, TOP + U * 0.04, 0);
-      f.tore(U * 0.325, U * 0.032, Math.PI * 2, 32, 8, PROF);
-      f.restore();
+      f.peint(METAL_OMBRE, MAT_METAL);
+      plaque(f, rectArrondi(-U * 0.36, TOP + U * 0.01, U * 0.72, U * 0.06, U * 0.03), U * 0.04);
       // Le nasal, plaqué sur le devant du casque.
       f.peint(METAL_OMBRE, MAT_METAL);
       f.extrude(rectArrondi(-U * 0.035, TOP - U * 0.22, U * 0.07, U * 0.26, U * 0.02), DEVANT - U * 0.03, DEVANT + U * 0.02);
@@ -430,34 +409,27 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
 
   fleurs: {
     corps(f) {
-      f.peint(FEUILLE, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.02, 0);
-      f.rotateX(penche(U * 0.4, U * 0.14));
-      f.tore(U * 0.4, U * 0.025, Math.PI * 2, 36, 8);
-      // Les fleurs sont posées sur l'anneau, pas devant : elles suivent donc
-      // son inclinaison, et c'est elle qui recrée l'ellipse du dessin.
-      for (const [ang, couleur] of [
-        [-Math.PI * 0.28, BLANC],
-        [0, ROSE],
-        [Math.PI * 0.28, BLANC],
+      // La couronne est une bande courbe posée devant le front, et les fleurs
+      // s'y accrochent aux mêmes abscisses que dans le dessin.
+      f.peint(FEUILLE, MAT_MAT);
+      f.ruban(arc(0, TOP + U * 0.02, U * 0.4, U * 0.14, Math.PI, Math.PI * 2, 24), U * 0.05, DEVANT, DEVANT + U * 0.035);
+      for (const [x, y, couleur] of [
+        [-U * 0.3, TOP - U * 0.03, BLANC],
+        [0, TOP - U * 0.12, ROSE],
+        [U * 0.3, TOP - U * 0.03, BLANC],
       ] as const) {
-        f.save();
-        f.translate(Math.sin(ang) * U * 0.4, 0, Math.cos(ang) * U * 0.4);
-        f.rotateY(-ang);
         for (let i = 0; i < 5; i++) {
           const a = (i / 5) * Math.PI * 2;
           f.peint(couleur, MAT_MAT).save();
-          f.translate(Math.cos(a) * U * 0.06, Math.sin(a) * U * 0.06, 0);
-          f.sphere([U * 0.05, U * 0.05, U * 0.035], 1, 12, 8);
+          f.translate(x + Math.cos(a) * U * 0.06, y + Math.sin(a) * U * 0.06, DEVANT + U * 0.04);
+          f.sphere([U * 0.05, U * 0.05, U * 0.04], 1, 12, 8);
           f.restore();
         }
         f.peint(OR, MAT_METAL).save();
-        f.translate(0, 0, U * 0.02);
-        f.sphere([U * 0.045, U * 0.045, U * 0.03], 1, 12, 8);
-        f.restore();
+        f.translate(x, y, DEVANT + U * 0.06);
+        f.sphere([U * 0.045, U * 0.045, U * 0.035], 1, 12, 8);
         f.restore();
       }
-      f.restore();
     },
   },
 
@@ -465,28 +437,15 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
     corps(f) {
       f.peint(JAUNE, MAT_MAT).save();
       f.translate(0, TOP + U * 0.04, 0);
-      f.sphere([U * 0.34, U * 0.27, U * 0.34 * PROF], 0.5, 26, 12);
+      f.sphere([U * 0.34, U * 0.27, PROF_TETE], 0.5, 26, 12);
       f.restore();
-      f.peint(JAUNE_OMBRE, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.045, 0);
-      f.rotateX(penche(U * 0.46, U * 0.09));
-      f.revolution(
-        [
-          [U * 0.2, -U * 0.014],
-          [U * 0.46, -U * 0.01],
-          [U * 0.46, U * 0.012],
-          [U * 0.2, U * 0.016],
-        ],
-        30,
-        false,
-        1,
-      );
-      f.restore();
+      f.peint(JAUNE_OMBRE, MAT_MAT);
+      plaque(f, arc(0, TOP + U * 0.05, U * 0.46, U * 0.09, Math.PI, Math.PI * 2, 30), U * 0.05);
       // La nervure court d'avant en arrière : c'est la crête du casque.
       f.peint(JAUNE_OMBRE, MAT_MAT).save();
       f.translate(0, TOP - U * 0.005, 0);
       f.rotateY(Math.PI / 2);
-      f.revolution([[U * 0.005, -U * 0.22 * PROF], [U * 0.035, 0], [U * 0.005, U * 0.22 * PROF]], 10, false, 1);
+      f.revolution([[U * 0.005, -PROF_TETE], [U * 0.035, 0], [U * 0.005, PROF_TETE]], 10, false, 1);
       f.restore();
     },
   },
@@ -495,7 +454,7 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
     corps(f) {
       f.peint(ROUGE, MAT_MAT).save();
       f.translate(0, TOP + U * 0.1, 0);
-      f.sphere([U * 0.42, U * 0.32, U * 0.42 * PROF], 0.5, 26, 12);
+      f.sphere([U * 0.42, U * 0.32, PROF_TETE], 0.5, 26, 12);
       f.restore();
       // Le nœud sur le côté, extrudé du même triangle que le dessin.
       f.peint(ROUGE_OMBRE, MAT_MAT);
@@ -516,7 +475,7 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
       ]) {
         const k = Math.sqrt(Math.max(0, 1 - (x / (U * 0.42)) ** 2 - ((y - (TOP + U * 0.1)) / (U * 0.32)) ** 2));
         f.save();
-        f.translate(x, y, k * U * 0.42 * PROF);
+        f.translate(x, y, k * PROF_TETE);
         f.sphere([U * 0.032, U * 0.032, U * 0.02], 1, 10, 8);
         f.restore();
       }
@@ -527,12 +486,10 @@ const CHAPEAUX: Partial<Record<HatKind, Objet3D>> = {
     corps(f) {
       f.peint(ROUGE, MAT_MAT).save();
       f.translate(0, TOP + U * 0.06, 0);
-      f.sphere([U * 0.3, U * 0.21, U * 0.3 * PROF], 0.5, 24, 12);
+      f.sphere([U * 0.3, U * 0.21, PROF_TETE], 0.5, 24, 12);
       f.restore();
-      f.peint(CIEL, MAT_MAT).save();
-      f.translate(0, TOP + U * 0.05, 0);
-      f.tore(U * 0.3, U * 0.04, Math.PI * 2, 30, 8, PROF);
-      f.restore();
+      f.peint(CIEL, MAT_MAT);
+      plaque(f, rectArrondi(-U * 0.34, TOP + U * 0.01, U * 0.68, U * 0.08, U * 0.04), U * 0.045);
       f.peint(JAUNE, MAT_MAT).save();
       f.translate(0, TOP - U * 0.16, 0);
       f.sphere([U * 0.04, U * 0.05, U * 0.04], 1, 12, 8);
@@ -721,12 +678,16 @@ const LUNETTES: Partial<Record<GlassKind, Objet3D>> = {
       f.sphere([U * 0.19, U * 0.17, U * 0.05], 1, 20, 12);
       f.restore();
       // La sangle fait le tour de la tête, comme le trait qui traverse en 2D.
-      f.peint(NOIR, MAT_MAT).save();
-      f.translate(0, EYE_Y - U * 0.11, 0);
-      f.rotateZ(0.1);
-      f.rotateX(Math.PI / 2);
-      f.tore(U * 0.5, U * 0.022, Math.PI * 2, 30, 6, PROF);
-      f.restore();
+      f.peint(NOIR, MAT_MAT);
+      f.ruban(
+        [
+          [-U * 0.5, EYE_Y - U * 0.16],
+          [U * 0.5, EYE_Y - U * 0.06],
+        ],
+        U * 0.045,
+        DEVANT,
+        DEVANT + U * 0.03,
+      );
     },
   },
 };
@@ -736,29 +697,13 @@ const LUNETTES: Partial<Record<GlassKind, Objet3D>> = {
 const ECHARPES: Partial<Record<ScarfKind, Objet3D>> = {
   echarpe: {
     corps(f) {
-      f.peint(LAINE, MAT_MAT).save();
-      f.translate(0, NECK + U * 0.015, 0);
-      f.tore(U * 0.46, U * 0.065, Math.PI * 2, 34, 8, autour(U * 0.46));
-      f.restore();
+      f.peint(LAINE, MAT_MAT);
+      plaque(f, rectArrondi(-U * 0.46, NECK - U * 0.05, U * 0.92, U * 0.13, U * 0.06), U * 0.06);
       f.peint(LAINE, MAT_MAT);
       f.extrude(rectArrondi(U * 0.16, NECK + U * 0.02, U * 0.13, U * 0.18, U * 0.05), DEVANT, DEVANT + U * 0.06);
       f.peint(CREME, MAT_MAT);
       for (const x of [-U * 0.32, -U * 0.06, U * 0.2]) {
-        const k = Math.sqrt(Math.max(0, 1 - (x / (U * 0.46)) ** 2));
-        f.save();
-        f.translate(x, NECK + U * 0.015, k * U * 0.46 * autour(U * 0.46) + U * 0.02);
-        f.rotateZ(Math.asin(Math.max(-1, Math.min(1, x / (U * 0.46)))));
-        f.extrude(
-          [
-            [-U * 0.03, -U * 0.07],
-            [U * 0.03, -U * 0.07],
-            [U * 0.03, U * 0.07],
-            [-U * 0.03, U * 0.07],
-          ],
-          0,
-          U * 0.012,
-        );
-        f.restore();
+        plaque(f, rectArrondi(x, NECK - U * 0.05, U * 0.06, U * 0.13, U * 0.01), U * 0.012, U * 0.06);
       }
       f.peint(CREME, MAT_MAT);
       f.extrude(
@@ -829,27 +774,15 @@ const ECHARPES: Partial<Record<ScarfKind, Objet3D>> = {
         U * 0.02,
       );
       f.restore();
-      f.peint(teinte('#A8DFF2'), MAT_MAT).save();
-      f.translate(0, NECK - U * 0.065, 0);
-      f.tore(U * 0.33, U * 0.035, Math.PI * 2, 30, 8, autour(U * 0.33));
-      f.restore();
+      f.peint(teinte('#A8DFF2'), MAT_MAT);
+      plaque(f, rectArrondi(-U * 0.32, NECK - U * 0.1, U * 0.64, U * 0.07, U * 0.03), U * 0.04, U * 0.03);
     },
   },
 
   colRoule: {
     corps(f) {
       f.peint(teinte('#6D7896'), MAT_MAT);
-      f.revolution(
-        [
-          [U * 0.3, NECK + U * 0.14],
-          [U * 0.34, NECK + U * 0.04],
-          [U * 0.34, NECK - U * 0.04],
-          [U * 0.3, NECK - U * 0.1],
-        ],
-        30,
-        false,
-        autour(U * 0.34),
-      );
+      plaque(f, rectArrondi(-U * 0.34, NECK - U * 0.1, U * 0.68, U * 0.24, U * 0.09), U * 0.09, -U * 0.04);
     },
   },
 
@@ -901,10 +834,8 @@ const ECHARPES: Partial<Record<ScarfKind, Objet3D>> = {
         f.restore();
       }
       f.restore();
-      f.peint(ROUGE, MAT_MAT).save();
-      f.translate(0, NECK - U * 0.045, 0);
-      f.tore(U * 0.32, U * 0.065, Math.PI * 2, 30, 8, autour(U * 0.32));
-      f.restore();
+      f.peint(ROUGE, MAT_MAT);
+      plaque(f, rectArrondi(-U * 0.32, NECK - U * 0.11, U * 0.64, U * 0.13, U * 0.065), U * 0.06);
     },
   },
 };

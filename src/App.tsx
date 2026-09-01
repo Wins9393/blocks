@@ -358,6 +358,7 @@ export default function App() {
           slot={prix.slot}
           piece={pieceFor(prix.slot, prix.piece)!}
           wardrobe={wardrobe}
+          relief={prefs.relief}
           onClose={() => {
             setPrix(null);
             rangeLaTable();
@@ -379,6 +380,7 @@ export default function App() {
         <Workshop
           wardrobe={wardrobe}
           gagnees={gagnees}
+          relief={prefs.relief}
           onChange={dressBlock}
           onReset={resetBlock}
           onClose={() => setShopOpen(false)}

@@ -102,11 +102,11 @@ couleur est effacée entre elles — et chaque bloc reçoit un z tiré de son or
 de dessin : le chapeau d'un bloc du fond passe donc derrière le bloc de devant,
 alors même qu'il est peint après lui.
 
-**La caméra est en perspective**, l'œil au milieu de l'écran, à une hauteur
-d'écran de distance (`RECUL`). Le plan médian d'un bloc tombe exactement là où
-la physique le place — ombres, pastilles et aperçus de fusion restent donc calés
-au pixel — et seule son épaisseur fuit : un bloc posé sur un bord montre sa
-tranche, deux à trois pixels sur un téléphone.
+**La caméra est en perspective**, l'œil au milieu de l'écran, à quatre
+cinquièmes de hauteur d'écran (`RECUL`). Le plan médian d'un bloc tombe
+exactement là où la physique le place — ombres, pastilles et aperçus de fusion
+restent donc calés au pixel — et seule son épaisseur fuit : un bloc posé sur un
+bord montre sa tranche.
 
 Ce n'est pas gratuit et il faut le savoir : la face avant, plus proche de l'œil,
 grandit d'un centième et s'écarte du centre, si bien que le dessin d'un bloc du
@@ -131,13 +131,20 @@ C'est ce qui rend la silhouette identique par construction, ponts compris, sans
 recalculer de contour.
 
 **Les objets sont transcrits, pas réinventés.** Chaque pièce reprend les cotes
-de son dessin (`src/render/objets3d.ts`) : ce qui est plat de face est extrudé
-du tracé lui-même — découpe d'oreilles, donc étoile, cœur et oreille de chat
-sont justes au point près ; ce qui fait le tour de la tête devient un solide de
-révolution aplati, parce qu'un bloc est une dalle et non un cube ; et ce que le
-dessin montre en ellipse — un bord de chapeau, une auréole — est un anneau
-incliné de `asin(ry / rx)`, la vieille triche des jeux plats, qui rend la
-silhouette d'origine.
+de son dessin (`src/render/objets3d.ts`), selon trois règles apprises à la
+mesure :
+
+- ce qui est **plat de face** — étoile, cœur, oreille de chat — est extrudé du
+  tracé lui-même, par découpe d'oreilles : c'est juste au point près ;
+- ce qui **coiffe la tête** — dômes, cônes, calottes — doit être *plus profond
+  que la dalle*. Moins profond, sa partie basse passe derrière la face avant du
+  bloc et le chapeau se met à flotter au-dessus du crâne ;
+- ce que le dessin **étale en bande** — bord de chapeau, bandeau, écharpe —
+  devient une plaque posée devant la dalle. L'anneau serait plus juste, mais sur
+  vingt-trois pixels d'épaisseur il ne montre qu'un arc deux fois plus étroit
+  que la tête. Et le pousser vers l'avant ne sauve rien : sous une perspective,
+  avancer un objet l'éloigne aussi du centre de l'écran, donc il remonte
+  d'autant qu'on l'avait fait descendre.
 
 **Seuls les objets passent en volume.** Cheveux, sourcils, bouches, moustaches,
 joues et yeux restent dessinés : le regard suit le doigt et les paupières
@@ -145,16 +152,25 @@ clignent, ce qu'une texture ne saurait pas suivre sans être repeinte à chaque
 image. Deux tests tiennent ce partage — que toute pièce d'objet ait bien un
 modèle, et que la pilosité n'en ait pas.
 
-Un piège trouvé en mesurant : **tout ce que le dessin pose *sur* le bloc doit
-sortir de son épaisseur.** Écharpes, nœud papillon, médaille et foulard étaient
-modelés au milieu de la dalle — donc parfaitement invisibles. Ils sont
-maintenant plaqués juste devant, et les anneaux qui font le tour du cou sont
-aplatis juste ce qu'il faut pour ne pas s'y noyer.
+Deux pièges trouvés en mesurant. **Tout ce que le dessin pose *sur* le bloc doit
+sortir de son épaisseur** : écharpes, nœud papillon, médaille et foulard étaient
+modelés au milieu de la dalle, donc parfaitement invisibles. Et **la normale
+d'un solide de révolution dépend du sens de son profil** : décrit de bas en
+haut, un cylindre s'éclairait par l'intérieur et ressortait deux fois trop
+sombre — le haut-de-forme en faisait les frais.
 
-L'éclairage est volontairement doux : beaucoup d'ambiante, peu de spéculaire.
-La couleur d'un bloc dit quel nombre on regarde ; un éclairage de studio, plus
-joli sur un objet isolé, la ferait bouger avec l'orientation et brouillerait la
-lecture. Le tout coûte **0,2 ms par image** de plus que le trait, avec vingt
+**L'atelier montre les pièces dans le même volume que la scène** : la vignette
+du bloc, les dix blocs de la rangée et chaque essayage passent par le même
+moteur, avec un œil à distance fixe — une vignette de cent pixels ne doit pas
+fuir comme un grand-angle. Le moteur des vignettes a son propre contexte pour
+ne pas déranger celui de la scène.
+
+L'éclairage reste doux mais franc : beaucoup d'ambiante, une lampe d'appoint
+sans ombre du côté opposé à la clé — elle relève les faces que la lumière
+principale laisse dans le noir, comme le faisait le dégradé du dessin — et peu
+de spéculaire. La couleur d'un bloc dit quel nombre on regarde ; un éclairage de
+studio, plus joli sur un objet isolé, la ferait bouger avec l'orientation et
+brouillerait la lecture. Le tout coûte **0,2 ms par image** de plus que le trait, avec vingt
 blocs et dix accessoires à l'écran.
 
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre

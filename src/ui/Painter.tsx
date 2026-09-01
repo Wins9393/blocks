@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 interface Props {
   /** Change quand le dessin doit être refait. */
   sig: string;
-  draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+  draw: (ctx: CanvasRenderingContext2D, w: number, h: number, dpr: number) => void;
   className?: string;
 }
 
@@ -31,7 +31,7 @@ export default function Painter({ sig, draw, className }: Props) {
       if (!ctx) return;
       ctx.save();
       ctx.scale(dpr, dpr);
-      drawRef.current(ctx, w, h);
+      drawRef.current(ctx, w, h, dpr);
       ctx.restore();
     };
 
