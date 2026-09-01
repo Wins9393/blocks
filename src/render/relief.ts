@@ -91,7 +91,7 @@ void main() {
   float appoint = max(dot(N, normalize(vec3(0.5, -0.3, 0.8))), 0.0) * 0.22;
   if (vMat < 0.5) {
     // Mat : plastique, laine, feutre.
-    c = vCol * (0.7 + 0.5 * diff + appoint) + vCol * refl * 0.18 + vec3(1.0) * spec * 0.2 + vCol * bord * 0.3;
+    c = vCol * (0.7 + 0.46 * diff + appoint) + vCol * refl * 0.16 + vec3(1.0) * spec * 0.18 + vCol * bord * 0.26;
   } else if (vMat < 1.5) {
     // Métal : il n'existe que par ce qu'il reflète.
     c = vCol * (0.3 + 0.5 * diff + appoint) + vCol * refl * 1.25 + vec3(1.0, 0.96, 0.86) * spec * 0.9;
@@ -106,7 +106,12 @@ void main() {
     // Gemme.
     c = vCol * (0.34 + 0.75 * diff + appoint) + refl * 0.32 + vec3(1.0) * spec * 1.5 + vCol * bord * 0.7;
   }
-  gl_FragColor = vec4(clamp(c, 0.0, 1.0), alpha);
+  // Écrêtage qui garde la teinte : diviser par le canal le plus fort plutôt
+  // que de couper chaque canal séparément. Sans ça, un bloc clair voit son
+  // bleu buter à 1 pendant que le rouge monte encore, et il vire au blanc.
+  float fort = max(max(c.r, c.g), c.b);
+  if (fort > 1.0) c /= fort;
+  gl_FragColor = vec4(max(c, 0.0) * alpha, alpha);
 }`;
 
 interface Tampons {
@@ -170,7 +175,10 @@ export class Relief {
       (this.canvas.getContext('webgl', {
         alpha: true,
         antialias: true,
-        premultipliedAlpha: false,
+        // Prémultiplié : avec l'anticrénelage, un pixel de bord sort déjà
+        // multiplié par sa couverture. En annonçant le contraire, le
+        // compositeur le redivise — d'où les liserés blancs sur mobile.
+        premultipliedAlpha: true,
         depth: true,
       }) as WebGLRenderingContext | null) ?? null;
     if (!gl) return;
@@ -204,7 +212,8 @@ export class Relief {
     for (const nom of ['uProj', 'uModele', 'uNormale', 'uOeil', 'uBiais'])
       this.uni[nom] = gl.getUniformLocation(prog, nom);
     gl.enable(gl.DEPTH_TEST);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    // Mélange prémultiplié, assorti au contexte.
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0, 0, 0, 0);
   }
 
@@ -438,85 +447,27 @@ export class Relief {
 
 // --- géométrie d'un bloc ---------------------------------------------------
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** Regroupe les cases en rectangles maximaux : moins de boîtes à assembler. */
-function rectangles(cells: Array<{ x: number; y: number }>): Rect[] {
-  const reste = new Set(cells.map((c) => `${c.x},${c.y}`));
-  const out: Rect[] = [];
-  const trie = [...cells].sort((a, b) => a.y - b.y || a.x - b.x);
-  for (const c of trie) {
-    if (!reste.has(`${c.x},${c.y}`)) continue;
-    let w = 1;
-    while (reste.has(`${c.x + w},${c.y}`)) w++;
-    let h = 1;
-    for (;;) {
-      let complet = true;
-      for (let i = 0; i < w; i++) if (!reste.has(`${c.x + i},${c.y + h}`)) complet = false;
-      if (!complet) break;
-      h++;
-    }
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) reste.delete(`${c.x + i},${c.y + j}`);
-    out.push({ x: c.x, y: c.y, w, h });
-  }
-  return out;
-}
-
 /**
- * Le bloc en volume : l'union des rectangles arrondis que le moteur 2D
- * assemble déjà pour tracer sa silhouette — les cases, plus un pont partout où
- * deux cases se touchent sans appartenir au même rectangle. La silhouette
- * projetée est donc *exactement* celle du dessin, ponts compris.
+ * Le bloc en volume : **un cube arrondi par case, collés côte à côte**.
+ *
+ * C'est la version qui rend le mieux, et pour une raison simple : le creux
+ * entre deux cubes voisins *est* la rainure. Rien à tracer par-dessus, et
+ * chaque cube attrape la lumière sur son propre arrondi.
+ *
+ * L'assembler à partir de grands rectangles coûtait moins de triangles, mais
+ * laissait un trou en étoile à chaque croisement de quatre cases — un défaut
+ * bien visible sur un bloc de dix-neuf, où la lumière s'y engouffrait.
  */
 export function mailleBloc(value: number): Maille {
   const f = new Forge();
   const cells = centeredCells(value);
-  const shape = shapeFor(value);
-  const grille = shape.cells;
-  const rects = rectangles(grille);
-  const rangDe = new Map<string, number>();
-  rects.forEach((r, i) => {
-    for (let j = 0; j < r.h; j++) for (let k = 0; k < r.w; k++) rangDe.set(`${r.x + k},${r.y + j}`, i);
-  });
-
-  // Décalage entre la grille entière et le repère centré sur la masse.
-  const offX = cells[0].x - grille[0].x;
-  const offY = cells[0].y - grille[0].y;
-  const r = CORNER;
   f.peint(teinte(colorFor(value)), MAT_MAT);
-
-  for (const rect of rects) {
-    const cx = (rect.x + (rect.w - 1) / 2 + offX) * UNIT;
-    const cy = (rect.y + (rect.h - 1) / 2 + offY) * UNIT;
+  for (const c of cells) {
     f.save();
-    f.translate(cx, cy, 0);
-    f.boite([(rect.w * UNIT) / 2, (rect.h * UNIT) / 2, Z], r, 4);
+    f.translate(c.x * UNIT, c.y * UNIT, 0);
+    f.boite([UNIT / 2, UNIT / 2, Z], CORNER, 4);
     f.restore();
   }
-
-  const occupe = new Set(grille.map((c) => `${c.x},${c.y}`));
-  for (const c of grille) {
-    for (const [dx, dy] of [
-      [1, 0],
-      [0, 1],
-    ]) {
-      const voisin = `${c.x + dx},${c.y + dy}`;
-      if (!occupe.has(voisin)) continue;
-      if (rangDe.get(`${c.x},${c.y}`) === rangDe.get(voisin)) continue;
-      const cx = (c.x + dx / 2 + offX) * UNIT;
-      const cy = (c.y + dy / 2 + offY) * UNIT;
-      f.save();
-      f.translate(cx, cy, 0);
-      f.boite([dx ? 2 * r : UNIT / 2, dy ? 2 * r : UNIT / 2, Z], r, 3);
-      f.restore();
-    }
-  }
-
   return f.fini();
 }
 

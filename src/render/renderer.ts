@@ -451,9 +451,8 @@ export class Renderer {
       ctx.scale(a.sx, a.sy);
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      // Les rainures restent dessinées : elles se posent sur la face avant du
-      // volume et laissent compter les cubes, comme avant.
-      paintSeams(ctx, p.art, p.angle);
+      // Pas de rainures dessinées ici : en volume, ce sont les creux entre
+      // cubes voisins qui les font, et un trait par-dessus les doublerait.
       this.drawShine(p.art, b.pop);
       drawCharacter(ctx, b.value, colorFor(b.value), {
         pose: this.pose(b, scene),

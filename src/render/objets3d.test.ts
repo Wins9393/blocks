@@ -81,10 +81,11 @@ describe('les blocs en volume', () => {
     for (let v = 1; v <= MAX_VALUE; v++) verifie(mailleBloc(v), `bloc ${v}`);
   });
 
-  it('a exactement la silhouette du dessin', () => {
-    // C'est l'invariant qui rend la bascule honnête : le volume occupe les
-    // mêmes pixels que le trait, sinon le visage dessiné par-dessus glisserait
-    // et les deux moteurs ne montreraient plus le même bloc.
+  it('tient dans le même cadre que le dessin', () => {
+    // C'est l'invariant qui rend la bascule honnête : le volume occupe le même
+    // rectangle que le trait — au pincement près à chaque jointure de cubes —
+    // sinon le visage dessiné par-dessus glisserait et les deux moteurs ne
+    // montreraient plus le même bloc.
     for (let v = 1; v <= MAX_VALUE; v++) {
       const cells = centeredCells(v);
       const attendu = {

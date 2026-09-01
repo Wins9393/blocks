@@ -117,18 +117,23 @@ plat, le raccourcir creuse la fuite et tord les bords.
 **Le visage au trait reçoit la même homothétie** (`avantPlan`) : il se peint sur
 la face avant du volume, pas sur le plan médian. Sans cette correction, il
 glisse du corps dès qu'un bloc quitte le milieu de l'écran — deux pixels, mais
-deux pixels qui décollent les yeux de la tête. Dans le repère du bloc, la
-silhouette du volume reste celle du trait : un test le vérifie pour les cent
-valeurs.
+deux pixels qui décollent les yeux de la tête. Un test vérifie pour les cent
+valeurs que le volume tient dans le même cadre que le dessin.
 
 **L'ordre de dessin ne recule plus les blocs.** Il se traduit par un simple
 décalage de profondeur dans le nuanceur : sous une perspective, reculer un bloc
 pour l'ordonner l'aurait rapetissé.
 
-**Le bloc en volume est l'union des mêmes rectangles arrondis que le moteur 2D
-assemble déjà** : les cases, plus un pont partout où deux cases se touchent.
-C'est ce qui rend la silhouette identique par construction, ponts compris, sans
-recalculer de contour.
+**Le bloc en volume est un cube arrondi par case, collés côte à côte.** Le creux
+entre deux cubes voisins *est* la rainure : rien à tracer par-dessus, et chaque
+cube attrape la lumière sur son propre arrondi. C'est ce qui lui donne l'air
+d'un jouet plutôt que d'une plaque gravée.
+
+L'assembler à partir de grands rectangles coûtait moins de triangles, mais
+laissait **un trou en étoile à chaque croisement de quatre cases** — invisible
+sur un carré de quatre, criant sur un dix-neuf, où la lumière s'y engouffrait.
+Le cube par case n'a pas ce défaut, et sa silhouette garde les mêmes cotes que
+le dessin, à un petit pincement près à chaque jointure.
 
 **Les objets sont transcrits, pas réinventés.** Chaque pièce reprend les cotes
 de son dessin (`src/render/objets3d.ts`), selon trois règles apprises à la
@@ -164,6 +169,15 @@ du bloc, les dix blocs de la rangée et chaque essayage passent par le même
 moteur, avec un œil à distance fixe — une vignette de cent pixels ne doit pas
 fuir comme un grand-angle. Le moteur des vignettes a son propre contexte pour
 ne pas déranger celui de la scène.
+
+**Deux réglages du rendu se paient cher si on les rate.** Le contexte WebGL est
+déclaré en **alpha prémultiplié** : avec l'anticrénelage, un pixel de bord sort
+déjà multiplié par sa couverture, et annoncer le contraire fait redividiser le
+compositeur — d'où des liserés blancs, invisibles sur un écran de bureau et
+criants sur mobile. Et l'écrêtage des couleurs **garde la teinte** : on divise
+par le canal le plus fort au lieu de couper chaque canal, sans quoi un bloc
+clair voit son bleu buter à 1 pendant que son rouge monte encore, et vire au
+blanc.
 
 L'éclairage reste doux mais franc : beaucoup d'ambiante, une lampe d'appoint
 sans ombre du côté opposé à la clé — elle relève les faces que la lumière
