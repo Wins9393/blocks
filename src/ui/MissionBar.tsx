@@ -11,6 +11,7 @@ interface Props {
   total: number;
   onSay: () => void;
   onSkip: () => void;
+  onMap: () => void;
 }
 
 /**
@@ -26,6 +27,7 @@ export default function MissionBar({
   total,
   onSay,
   onSkip,
+  onMap,
 }: Props) {
   const combien = mission.nombre ?? 1;
 
@@ -45,9 +47,16 @@ export default function MissionBar({
 
       <div className="mission-mots">
         <span className="mission-enonce">{gagne ? 'Bravo, tu l’as fabriqué !' : mission.enonce}</span>
-        <span className="mission-compte">
+        {/* Le compteur est la porte de la carte : c'est là qu'on regarde où on
+            en est, donc c'est là qu'on cherche à revenir en arrière. */}
+        <button className="mission-compte" onClick={onMap} aria-label="Voir toutes les missions">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="6" cy="7" r="1.6" />
+            <circle cx="6" cy="17" r="1.6" />
+            <path d="M11 7h8M11 17h8" />
+          </svg>
           {faites} / {total}
-        </span>
+        </button>
       </div>
 
       {gagne ? (

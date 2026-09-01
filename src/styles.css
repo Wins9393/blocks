@@ -333,10 +333,133 @@ button:disabled {
   line-height: 1.2;
 }
 
+/* Le compteur est un bouton : c'est la ou on regarde ou on en est, donc c'est
+   la qu'on cherche a revenir en arriere. */
 .mission-compte {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
   font-size: 12px;
   font-weight: 700;
-  opacity: 0.55;
+  opacity: 0.72;
+}
+
+.mission-compte svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* --- carte du parcours -------------------------------------------------- */
+
+.carte-card {
+  width: min(400px, 100%);
+  max-height: calc(100dvh - 24px);
+  gap: 10px;
+  padding: 16px 16px 14px;
+}
+
+.carte-corps {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.carte-corps::-webkit-scrollbar {
+  display: none;
+}
+
+.carte-titre {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0.7;
+}
+
+.carte-part {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+/* Six cases par chapitre, toutes visibles : derriere un defilement, un enfant
+   ne retrouve pas la mission qu'il vient de faire. */
+.carte-grille {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+
+.carte-case {
+  position: relative;
+  min-width: 0;
+  height: 54px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid transparent;
+}
+
+.carte-case.faite {
+  background: rgba(255, 210, 117, 0.1);
+}
+
+.carte-case.current {
+  border-color: rgba(255, 210, 117, 0.8);
+  background: rgba(255, 210, 117, 0.16);
+}
+
+.carte-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Trois missions montrent un bloc de 2 : sans le nombre demande, elles se
+   ressemblent toutes. */
+.carte-nombre {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  padding: 0 3px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 13px;
+  background: rgba(12, 16, 26, 0.62);
+}
+
+.carte-coche {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 15px;
+  height: 15px;
+  padding: 2px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffe4a0, #efb43c);
+  fill: none;
+  stroke: #3a2b06;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Bandeau de reussite : il se dore un instant, le temps que la scene fete le

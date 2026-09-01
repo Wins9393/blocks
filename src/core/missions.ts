@@ -132,7 +132,9 @@ const CHAPITRE_1: Chapitre = {
       enonce: 'Fabrique un bloc tout carré',
       cible: 4,
       prix: { slot: 'hat', piece: 'fleurs' },
-      check: (s) => s.values.some(estCarre),
+      // Surtout pas `some(estCarre)` : `some` passe l'indice en second argument,
+      // le côté minimal tombait à 0 et un simple bloc de 1 gagnait la mission.
+      check: (s) => s.values.some((v) => estCarre(v)),
     }),
   ],
 };
@@ -358,6 +360,34 @@ export const CHAPITRES: readonly Chapitre[] = [
 ];
 
 export const MISSIONS: readonly Mission[] = CHAPITRES.flatMap((c) => c.missions);
+
+/** Les dix blocs de la barre, quand la mission n'en retire aucun. */
+export const BARRE: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/**
+ * Les blocs offerts dans la barre pour une mission.
+ *
+ * **Un bloc qui gagne la mission rien qu'en le posant n'a pas sa place dans la
+ * barre.** « Fabrique un bloc de 2 » se réglait d'un doigt sur le 2 : aucune
+ * recherche, aucune réflexion. On retire donc tout bloc qui, posé une fois — ou
+ * autant de fois que la mission en demande — valide déjà le prédicat. Ce qui
+ * reste force au moins un geste : coller, couper ou secouer.
+ *
+ * C'est une règle, pas une liste : elle se déduit du prédicat, donc une mission
+ * ajoutée demain est filtrée sans qu'on y pense. Effet de bord heureux —
+ * « fabrique un bloc qui a une bosse » perd le 5 *et* le 7, et « fabrique un
+ * bloc bien plein » perd tous les rectangles pleins de la barre.
+ */
+export function paletteFor(mission: Mission): number[] {
+  const base = mission.palette ?? BARRE;
+  const combien = mission.nombre ?? 1;
+  return base.filter((v) => {
+    for (let k = 1; k <= combien; k++) {
+      if (mission.check({ values: Array.from({ length: k }, () => v) })) return false;
+    }
+    return true;
+  });
+}
 
 export function missionById(id: string): Mission | undefined {
   return MISSIONS.find((mission) => mission.id === id);

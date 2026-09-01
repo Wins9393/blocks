@@ -167,6 +167,12 @@ export interface Progress {
   passees: string[];
   /** Le mode mission est allumé pour cet espace. */
   actif: boolean;
+  /**
+   * Mission choisie à la main sur la carte du parcours. Absente, c'est la
+   * suite du parcours qui est jouée : refaire une mission est un détour, pas
+   * un état durable.
+   */
+  choisie?: string;
 }
 
 const AUCUNE_PROGRESSION: Progress = { faites: [], pieces: [], passees: [], actif: false };
@@ -182,6 +188,7 @@ export function loadProgress(spaceId: string): Progress {
     pieces: listeDeTextes(data.pieces),
     passees: listeDeTextes(data.passees),
     actif: data.actif === true,
+    choisie: typeof data.choisie === 'string' ? data.choisie : undefined,
   };
 }
 

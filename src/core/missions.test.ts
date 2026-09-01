@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_UNITS } from './constants';
-import { CHAPITRES, MISSIONS, aUneBosse, estCarre, nextMission } from './missions';
+import { CHAPITRES, MISSIONS, aUneBosse, estCarre, missionById, nextMission, paletteFor } from './missions';
 import { SLOTS, pieceFor } from './wardrobe';
 
 describe('le parcours', () => {
@@ -63,19 +63,61 @@ describe('le parcours', () => {
     // cible en demande. En dessous, la mission est un mur : couper et secouer
     // savent réduire un bloc, jamais en fabriquer de la matière.
     for (const m of MISSIONS) {
-      if (!m.palette) continue;
+      const barre = paletteFor(m);
       const besoin = m.cible * (m.nombre ?? 1);
       const sommes = new Set<number>([0]);
       for (let i = 0; i < MAX_UNITS; i++) {
         for (const somme of [...sommes]) {
-          for (const v of m.palette) if (somme + v <= MAX_UNITS) sommes.add(somme + v);
+          for (const v of barre) if (somme + v <= MAX_UNITS) sommes.add(somme + v);
         }
       }
       const assez = [...sommes].some((s) => s >= besoin);
       expect(assez, `${m.id} : ${besoin} cubes hors d'atteinte`).toBe(true);
     }
   });
+
+  it('laisse toujours de quoi jouer dans la barre', () => {
+    for (const m of MISSIONS) expect(paletteFor(m).length, `${m.id}`).toBeGreaterThan(0);
+  });
+
+  it('ne se gagne jamais en posant seulement des blocs', () => {
+    // C'est la règle de la barre : le bloc qui donne la réponse n'y est pas.
+    // Sans ça, « fabrique un bloc de 2 » se réglait d'un doigt sur le 2 — pas
+    // de recherche, pas de réflexion. Il doit rester au moins un geste à faire.
+    for (const m of MISSIONS) {
+      const barre = paletteFor(m);
+      // Une de plus que ce que la mission demande : la marge attrape une
+      // mission qui se laisserait gagner en posant un bloc de trop.
+      for (const main of mains(barre, (m.nombre ?? 1) + 1)) {
+        expect(m.check({ values: main }), `${m.id} : ${main.join('+')} suffit`).toBe(false);
+      }
+    }
+  });
+
+  it('ne se gagne pas en posant un bloc de 1', () => {
+    // `some(estCarre)` passait l'indice du tableau en second argument : le côté
+    // minimal tombait à 0 et « fabrique un bloc tout carré » était gagné par
+    // n'importe quel 1 traînant dans la scène.
+    for (const m of MISSIONS) expect(m.check({ values: [1] }), `${m.id}`).toBe(false);
+    expect(missionById('carre')!.check({ values: [1] })).toBe(false);
+  });
 });
+
+/** Toutes les mains qu'on peut poser sans rien assembler, jusqu'à `taille` blocs. */
+function mains(barre: number[], taille: number): number[][] {
+  const out: number[][] = [];
+  const marche = (debut: number, courante: number[]) => {
+    if (courante.length) out.push([...courante]);
+    if (courante.length === taille) return;
+    for (let i = debut; i < barre.length; i++) {
+      courante.push(barre[i]);
+      marche(i, courante);
+      courante.pop();
+    }
+  };
+  marche(0, []);
+  return out;
+}
 
 describe('les formes', () => {
   it('reconnaît les carrés, sauf le 1', () => {

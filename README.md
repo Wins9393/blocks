@@ -141,6 +141,22 @@ règle est dans ce qui est disponible : rien à lire, rien à enfreindre. Et pou
 « enlève 1 à un 4 », seuls des 4 sont offerts — la soustraction naît de ce qui
 manque dans la barre.
 
+**La barre ne contient jamais la réponse.** « Fabrique un bloc de 2 » se réglait
+d'un doigt sur le 2 : aucune recherche, aucune réflexion. Tout bloc qui gagne la
+mission rien qu'en le posant — autant de fois que la mission en demande — est
+donc retiré de la barre (`paletteFor`). C'est une règle déduite du prédicat, pas
+une liste : une mission ajoutée demain est filtrée sans qu'on y pense, et les
+conséquences se lisent toutes seules — « un bloc qui a une bosse » perd le 5
+*et* le 7, « un bloc bien plein » perd tous les rectangles pleins, « trois blocs
+pareils » ne laisse que le 1. Un test énumère toutes les mains qu'on peut poser
+sans rien assembler et vérifie qu'aucune ne gagne : il reste toujours au moins
+un geste à faire.
+
+Ce filtre a mis au jour une vieille bévue : « fabrique un bloc tout carré »
+s'écrivait `values.some(estCarre)`, et `some` passe l'indice du tableau en
+second argument — le côté minimal tombait à 0, et n'importe quel bloc de 1
+gagnait la mission.
+
 **Le fantôme montre une solution, pas la seule.** « Fabrique un bloc tout carré »
 affiche un 4 ; le prédicat accepte 9, 16, 25. Un test vérifie l'invariant : la
 solution montrée doit toujours valider la mission, sinon l'enfant fait
@@ -149,6 +165,16 @@ exactement ce qu'on lui montre et il ne se passe rien.
 **Aucun échec.** Pas de minuteur, pas de vies, pas de mauvaise réponse. Faire 9
 au lieu de 8 ne déclenche rien : on secoue, et voilà. Une mission mise de côté
 repasse en fin de file plutôt que de disparaître.
+
+**Rien n'est verrouillé : la carte du parcours ouvre les trente missions.** Le
+compteur du bandeau y mène — c'est là qu'on regarde où on en est, donc c'est là
+qu'on cherche à revenir en arrière. Chaque chapitre montre ses six missions en
+images, cochées quand elles sont réussies, et n'importe laquelle se rejoue.
+Avant, la seule navigation était « une autre » : on avançait, on ne revenait
+jamais. Refaire une mission se fête pareil dans la scène mais n'ouvre pas de
+panneau de récompense — la pièce est déjà dans l'atelier, et un panneau qui la
+« donne » une seconde fois mentirait. Le choix est un détour, pas un état : la
+mission faite, le parcours reprend sa suite.
 
 **La table se range entre deux missions.** Les blocs de la mission précédente
 validaient souvent la suivante tout seuls : « fabrique un bloc de 3 » était déjà
@@ -207,7 +233,7 @@ couleurs propres, personnages dessinés pour ce projet, nom original.
 
 ## Suite
 
-- Une carte du parcours par chapitre, et la collection des pièces gagnées.
+- La collection des pièces gagnées, à côté de la carte du parcours.
 - Un sixième chapitre : il faudra d'abord dessiner les pièces qui vont avec.
 - Multiplication par rectangles (la forme canonique s'y prête déjà).
 - Soudure telle quelle + geste « ranger » qui claque la forme canonique.

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from './game/game';
 import type { GameState } from './game/game';
 import { playWin, say, setMuted } from './audio/sfx';
-import { MISSIONS, nextMission } from './core/missions';
+import { MISSIONS, missionById, nextMission, paletteFor } from './core/missions';
 import type { Mission, Prix } from './core/missions';
 import {
   cleanName,
@@ -22,6 +22,7 @@ import { defaultLook, pieceFor, pieceKey } from './core/wardrobe';
 import type { SlotKey, Wardrobe } from './core/wardrobe';
 import Hints from './ui/Hints';
 import MissionBar from './ui/MissionBar';
+import MissionMap from './ui/MissionMap';
 import NameDialog from './ui/NameDialog';
 import Palette from './ui/Palette';
 import RewardCard from './ui/RewardCard';
@@ -47,7 +48,8 @@ export default function App() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress(book.currentId));
   const [prix, setPrix] = useState<Prix | null>(null);
   /** Mission réussie, le temps de la fêter dans la scène avant le panneau. */
-  const [fete, setFete] = useState<{ mission: Mission; prix: Prix } | null>(null);
+  const [fete, setFete] = useState<{ mission: Mission; prix: Prix | null } | null>(null);
+  const [carteOpen, setCarteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -85,9 +87,14 @@ export default function App() {
   }, []);
 
   const gagnees = useMemo(() => new Set(progress.pieces), [progress.pieces]);
-  const mission = progress.actif
-    ? nextMission(new Set(progress.faites), new Set(progress.passees))
-    : undefined;
+  const faites = useMemo(() => new Set(progress.faites), [progress.faites]);
+  // Une mission choisie sur la carte passe devant le parcours. Un identifiant
+  // devenu inconnu — une mission retirée depuis — ne bloque pas : on reprend
+  // simplement la suite.
+  const mission = !progress.actif
+    ? undefined
+    : (progress.choisie ? missionById(progress.choisie) : undefined) ??
+      nextMission(faites, new Set(progress.passees));
 
   const avance = useCallback((id: string, next: Progress) => {
     saveProgress(id, next);
@@ -96,6 +103,20 @@ export default function App() {
 
   // Ce qu'on montre : la mission réussie tant qu'on la fête, la suivante après.
   const affichee = fete?.mission ?? mission;
+
+  /** Signature de la scène qui a déjà payé : elle ne paie jamais deux fois. */
+  const dernierSucces = useRef('');
+
+  /**
+   * Chaque mission commence sur une table vide. Les blocs de la mission
+   * précédente validaient souvent la suivante tout seuls : « fabrique un bloc
+   * de 3 » était déjà gagné parce qu'un 3 traînait, et l'enfant recevait une
+   * récompense sans rien faire.
+   */
+  const rangeLaTable = useCallback(() => {
+    gameRef.current?.tidy();
+    dernierSucces.current = '';
+  }, []);
 
   // L'énoncé est dit dès qu'il change : c'est ce qui rend le mode utilisable
   // par un enfant qui ne lit pas encore. Pas pendant la fête, la fanfare parle
@@ -113,26 +134,16 @@ export default function App() {
   useEffect(() => {
     if (!fete) return;
     const id = setTimeout(() => {
-      setPrix(fete.prix);
+      if (fete.prix) setPrix(fete.prix);
+      // Sans panneau à fermer, c'est la fin de la fête qui range la table.
+      else rangeLaTable();
       setFete(null);
     }, 1600);
     return () => clearTimeout(id);
-  }, [fete]);
+  }, [fete, rangeLaTable]);
 
   // Le jeu ignore tout des missions : il publie l'état de la scène, et c'est
   // ici qu'on statue. Une mission est un prédicat, pas un script.
-  const dernierSucces = useRef('');
-
-  /**
-   * Chaque mission commence sur une table vide. Les blocs de la mission
-   * précédente validaient souvent la suivante tout seuls : « fabrique un bloc
-   * de 3 » était déjà gagné parce qu'un 3 traînait, et l'enfant recevait une
-   * récompense sans rien faire.
-   */
-  const rangeLaTable = useCallback(() => {
-    gameRef.current?.tidy();
-    dernierSucces.current = '';
-  }, []);
   useEffect(() => {
     if (!mission || prix || fete) return;
     const signature = [...state.values].sort((a, b) => a - b).join(',');
@@ -142,19 +153,41 @@ export default function App() {
     if (!mission.check({ values: state.values })) return;
 
     dernierSucces.current = signature;
+    const dejaFaite = progress.faites.includes(mission.id);
     const cle = pieceKey(mission.prix.slot, mission.prix.piece);
     // La progression est enregistrée tout de suite : quitter pendant la fête
-    // ne doit pas coûter la récompense.
+    // ne doit pas coûter la récompense. Et on rend la main au parcours : refaire
+    // une mission est un détour, pas un état durable.
     avance(book.currentId, {
       ...progress,
-      faites: [...progress.faites, mission.id],
+      faites: dejaFaite ? progress.faites : [...progress.faites, mission.id],
       pieces: progress.pieces.includes(cle) ? progress.pieces : [...progress.pieces, cle],
       passees: progress.passees.filter((id) => id !== mission.id),
+      choisie: undefined,
     });
-    setFete({ mission, prix: mission.prix });
+    // Refaire une mission se fête pareil dans la scène, mais la pièce est déjà
+    // dans l'atelier : un panneau qui la « donne » une seconde fois ment.
+    setFete({ mission, prix: dejaFaite ? null : mission.prix });
     gameRef.current?.celebrate(mission.cible);
     playWin();
   }, [state.values, mission, prix, fete, progress, book.currentId, avance]);
+
+  /**
+   * Jouer une mission précise, réussie ou non. Elle passe devant le parcours
+   * jusqu'à ce qu'elle soit faite, et la table se range comme entre deux
+   * missions — sinon la scène en cours la validerait peut-être déjà.
+   */
+  const choisirMission = (id: string) => {
+    avance(book.currentId, {
+      ...progress,
+      choisie: id,
+      // La choisir, c'est la reprendre : elle n'est plus mise de côté.
+      passees: progress.passees.filter((x) => x !== id),
+    });
+    dernierDit.current = '';
+    rangeLaTable();
+    setCarteOpen(false);
+  };
 
   const commit = useCallback((next: SpaceBook) => {
     saveSpaces(next);
@@ -170,6 +203,7 @@ export default function App() {
     setProgress(loadProgress(id));
     setPrix(null);
     setFete(null);
+    setCarteOpen(false);
     dernierSucces.current = '';
     dernierDit.current = '';
     gameRef.current?.useSpace(id);
@@ -269,10 +303,12 @@ export default function App() {
           faites={progress.faites.length}
           total={MISSIONS.length}
           onSay={() => say(affichee.enonce)}
+          onMap={() => setCarteOpen(true)}
           onSkip={() => {
             avance(book.currentId, {
               ...progress,
               passees: [...progress.passees, affichee.id],
+              choisie: undefined,
             });
             rangeLaTable();
           }}
@@ -283,9 +319,18 @@ export default function App() {
         <div className="mission-bar">
           <div className="mission-mots">
             <span className="mission-enonce">Toutes les missions sont faites !</span>
-            <span className="mission-compte">
-              {MISSIONS.length} / {MISSIONS.length}
-            </span>
+            <button
+              className="mission-compte"
+              onClick={() => setCarteOpen(true)}
+              aria-label="Voir toutes les missions"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="6" cy="7" r="1.6" />
+                <circle cx="6" cy="17" r="1.6" />
+                <path d="M11 7h8M11 17h8" />
+              </svg>
+              En refaire une
+            </button>
           </div>
         </div>
       )}
@@ -293,7 +338,7 @@ export default function App() {
       <Palette
         state={state}
         wardrobe={wardrobe}
-        allowed={affichee?.palette}
+        allowed={affichee && paletteFor(affichee)}
         onPick={(v) => gameRef.current?.spawn(v)}
       />
 
@@ -310,6 +355,16 @@ export default function App() {
             setPrix(null);
             rangeLaTable();
           }}
+        />
+      )}
+
+      {carteOpen && (
+        <MissionMap
+          faites={faites}
+          courante={affichee?.id}
+          wardrobe={wardrobe}
+          onPick={choisirMission}
+          onClose={() => setCarteOpen(false)}
         />
       )}
 
