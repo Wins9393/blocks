@@ -54,16 +54,30 @@ export interface Chapitre {
 const compte = (s: Snapshot, v: number) => s.values.filter((x) => x === v).length;
 const aUnBloc = (v: number) => (s: Snapshot) => compte(s, v) > 0;
 const aDeuxBlocs = (v: number) => (s: Snapshot) => compte(s, v) >= 2;
+/** N blocs identiques, quelle que soit leur valeur — pourvu qu'elle dépasse 1. */
+const aNPareils = (n: number) => (s: Snapshot) =>
+  s.values.some((v) => v >= 2 && compte(s, v) >= n);
 
-/** Un carré, donc un nombre carré : 4, 9, 16, 25… Le 1 ne compte pas. */
-export function estCarre(value: number): boolean {
+/** Un carré d'au moins `cote` cubes de large : 4, 9, 16, 25… Le 1 ne compte pas. */
+export function estCarre(value: number, cote = 2): boolean {
   const shape = shapeFor(value);
-  return shape.w > 1 && shape.w === shape.h;
+  return shape.w >= cote && shape.w === shape.h;
 }
 
 /** Une bosse, donc un nombre premier à partir de 5. */
 export function aUneBosse(value: number): boolean {
   return value >= 5 && isPrime(value);
+}
+
+/** Une colonne d'un seul cube de large : 2 et 3, les petits premiers. */
+export function estColonne(value: number): boolean {
+  return value >= 2 && shapeFor(value).w === 1;
+}
+
+/** Un rectangle plein, donc un nombre composé : pas de bosse qui dépasse. */
+export function estPlein(value: number): boolean {
+  const shape = shapeFor(value);
+  return value >= 4 && shape.w * shape.h === value;
 }
 
 // --- le contenu -----------------------------------------------------------
@@ -72,7 +86,7 @@ const m = (mission: Mission): Mission => mission;
 
 const CHAPITRE_1: Chapitre = {
   id: 'compter',
-  titre: 'Compter jusqu à 5',
+  titre: 'Compter jusqu’à 5',
   missions: [
     m({
       id: 'faire-2',
@@ -125,7 +139,7 @@ const CHAPITRE_1: Chapitre = {
 
 const CHAPITRE_2: Chapitre = {
   id: 'jusqua-dix',
-  titre: 'Jusqu à 10',
+  titre: 'Jusqu’à 10',
   missions: [
     m({
       id: 'faire-7',
@@ -177,7 +191,171 @@ const CHAPITRE_2: Chapitre = {
   ],
 };
 
-export const CHAPITRES: readonly Chapitre[] = [CHAPITRE_1, CHAPITRE_2];
+const CHAPITRE_3: Chapitre = {
+  id: 'formes',
+  titre: 'Les formes',
+  missions: [
+    m({
+      id: 'colonne',
+      enonce: 'Fabrique un bloc tout en hauteur',
+      cible: 3,
+      prix: { slot: 'scarf', piece: 'foulard' },
+      check: (s) => s.values.some(estColonne),
+    }),
+    m({
+      id: 'carre-9',
+      enonce: 'Fabrique un carré plus grand',
+      cible: 9,
+      prix: { slot: 'hat', piece: 'bonnet' },
+      check: (s) => s.values.some((v) => estCarre(v, 3)),
+    }),
+    m({
+      id: 'plein',
+      enonce: 'Fabrique un bloc bien plein, sans bosse',
+      cible: 6,
+      prix: { slot: 'eyes', piece: 'endormis' },
+      check: (s) => s.values.some(estPlein),
+    }),
+    m({
+      id: 'trois-pareils',
+      enonce: 'Fabrique trois blocs pareils',
+      cible: 2,
+      nombre: 3,
+      prix: { slot: 'stache', piece: 'bouc' },
+      check: aNPareils(3),
+    }),
+    m({
+      // Seuls des 10 sont offerts : deux 5 ne s'obtiennent qu'en coupant.
+      id: 'moitie-10',
+      enonce: 'Coupe un 10 en deux blocs de 5',
+      cible: 5,
+      nombre: 2,
+      palette: [10],
+      prix: { slot: 'hat', piece: 'bois' },
+      check: aDeuxBlocs(5),
+    }),
+    m({
+      id: 'carre-16',
+      enonce: 'Fabrique un très grand carré',
+      cible: 16,
+      prix: { slot: 'glasses', piece: 'plongee' },
+      check: (s) => s.values.some((v) => estCarre(v, 4)),
+    }),
+  ],
+};
+
+const CHAPITRE_4: Chapitre = {
+  id: 'dizaine',
+  titre: 'La dizaine',
+  missions: [
+    m({
+      id: 'vingt',
+      enonce: 'Fabrique un bloc de 20',
+      cible: 20,
+      prix: { slot: 'hat', piece: 'aureole' },
+      check: aUnBloc(20),
+    }),
+    m({
+      id: 'deux-dix',
+      enonce: 'Fabrique deux blocs de 10',
+      cible: 10,
+      nombre: 2,
+      prix: { slot: 'hair', piece: 'tresses' },
+      check: aDeuxBlocs(10),
+    }),
+    m({
+      id: 'treize',
+      enonce: 'Fabrique un 13 avec un 10 et des 1',
+      cible: 13,
+      palette: [1, 10],
+      prix: { slot: 'eyes', piece: 'coeurs' },
+      check: aUnBloc(13),
+    }),
+    m({
+      id: 'quinze-5',
+      enonce: 'Fabrique un 15 avec seulement des 5',
+      cible: 15,
+      palette: [5],
+      prix: { slot: 'scarf', piece: 'medaille' },
+      check: aUnBloc(15),
+    }),
+    m({
+      id: 'douze-4',
+      enonce: 'Fabrique un 12 avec seulement des 4',
+      cible: 12,
+      palette: [4],
+      prix: { slot: 'brows', piece: 'faches' },
+      check: aUnBloc(12),
+    }),
+    m({
+      id: 'trente',
+      enonce: 'Fabrique un bloc de 30',
+      cible: 30,
+      prix: { slot: 'scarf', piece: 'colRoule' },
+      check: aUnBloc(30),
+    }),
+  ],
+};
+
+const CHAPITRE_5: Chapitre = {
+  id: 'defis',
+  titre: 'Les défis',
+  missions: [
+    m({
+      id: 'dix-sept',
+      enonce: 'Fabrique un 17 avec des 3 et des 1',
+      cible: 17,
+      palette: [1, 3],
+      prix: { slot: 'eyes', piece: 'spirale' },
+      check: aUnBloc(17),
+    }),
+    m({
+      id: 'cinq-fois-3',
+      enonce: 'Fabrique cinq blocs de 3',
+      cible: 3,
+      nombre: 5,
+      prix: { slot: 'glasses', piece: 'cache' },
+      check: (s) => compte(s, 3) >= 5,
+    }),
+    m({
+      id: 'dix-avec-3',
+      enonce: 'Fabrique un 10 avec seulement des 3',
+      cible: 10,
+      palette: [3],
+      prix: { slot: 'hat', piece: 'hautForme' },
+      check: aUnBloc(10),
+    }),
+    m({
+      id: 'grande-bosse',
+      enonce: 'Fabrique un bloc à bosse plus grand que 10',
+      cible: 11,
+      prix: { slot: 'scarf', piece: 'cape' },
+      check: (s) => s.values.some((v) => v > 10 && aUneBosse(v)),
+    }),
+    m({
+      id: 'vingt-quatre',
+      enonce: 'Fabrique un bloc de 24',
+      cible: 24,
+      prix: { slot: 'stache', piece: 'blanche' },
+      check: aUnBloc(24),
+    }),
+    m({
+      id: 'cinquante',
+      enonce: 'Fabrique un bloc de 50',
+      cible: 50,
+      prix: { slot: 'hat', piece: 'helice' },
+      check: aUnBloc(50),
+    }),
+  ],
+};
+
+export const CHAPITRES: readonly Chapitre[] = [
+  CHAPITRE_1,
+  CHAPITRE_2,
+  CHAPITRE_3,
+  CHAPITRE_4,
+  CHAPITRE_5,
+];
 
 export const MISSIONS: readonly Mission[] = CHAPITRES.flatMap((c) => c.missions);
 

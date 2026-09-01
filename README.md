@@ -124,8 +124,8 @@ synthèse du navigateur, en français. La PWA pèse ~100 ko compressés.
 
 ## Les missions
 
-Le mode mission (drapeau dans la barre du haut) enchaîne douze exercices en deux
-chapitres. Chacun affiche **le bloc à fabriquer, en image**, avec son chiffre, et
+Le mode mission (drapeau dans la barre du haut) enchaîne trente exercices en cinq
+chapitres : compter jusqu'à 5, jusqu'à 10, les formes, la dizaine, les défis. Chacun affiche **le bloc à fabriquer, en image**, avec son chiffre, et
 le dit à voix haute : un enfant de quatre ans ne lit pas « fabrique un bloc de
 7 », il reconnaît la forme et il l'écoute.
 
@@ -150,11 +150,18 @@ exactement ce qu'on lui montre et il ne se passe rien.
 au lieu de 8 ne déclenche rien : on secoue, et voilà. Une mission mise de côté
 repasse en fin de file plutôt que de disparaître.
 
+**La réussite se voit d'abord dans la scène.** Le bloc qu'on vient de fabriquer
+saute et se couvre d'étincelles, le bandeau se dore, et le panneau de récompense
+n'arrive qu'une seconde et demie plus tard : ouvert aussitôt, il cachait la forme
+au moment précis où l'enfant veut la regarder.
+
 **Chaque réussite ouvre une pièce de l'atelier**, montrée portée sur un
 personnage plutôt que décrite. Les pièces fermées restent visibles en silhouette
 avec un cadenas : c'est ce qu'on voit sans l'avoir qui donne envie de le gagner.
 Des tests garantissent qu'aucune récompense n'est donnée deux fois, qu'aucune
-n'était déjà disponible, et qu'il en reste assez pour les chapitres suivants.
+n'était déjà disponible, et surtout que **toute pièce fermée est gagnable** : une
+pièce qu'aucune mission ne donne se verrait derrière son cadenas sans qu'aucun
+chemin n'y mène, et ce serait une promesse qu'on ne tient pas.
 
 ## Architecture
 
@@ -190,8 +197,7 @@ couleurs propres, personnages dessinés pour ce projet, nom original.
 
 ## Suite
 
-- Chapitres 3 à 5 : les formes, la dizaine, les défis — le vestiaire garde une
-  vingtaine de pièces fermées pour eux.
-- Une carte du parcours, et la collection des pièces gagnées.
+- Une carte du parcours par chapitre, et la collection des pièces gagnées.
+- Un sixième chapitre : il faudra d'abord dessiner les pièces qui vont avec.
 - Multiplication par rectangles (la forme canonique s'y prête déjà).
 - Soudure telle quelle + geste « ranger » qui claque la forme canonique.

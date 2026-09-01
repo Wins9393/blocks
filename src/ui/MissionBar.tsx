@@ -5,6 +5,8 @@ import type { Wardrobe } from '../core/wardrobe';
 interface Props {
   mission: Mission;
   wardrobe: Wardrobe;
+  /** La mission vient d'être réussie : le bandeau la fête au lieu de la poser. */
+  gagne: boolean;
   faites: number;
   total: number;
   onSay: () => void;
@@ -16,11 +18,19 @@ interface Props {
  * enfant de quatre ans ne lit pas « fabrique un bloc de 7 » — il reconnaît la
  * forme et il l'écoute.
  */
-export default function MissionBar({ mission, wardrobe, faites, total, onSay, onSkip }: Props) {
+export default function MissionBar({
+  mission,
+  wardrobe,
+  gagne,
+  faites,
+  total,
+  onSay,
+  onSkip,
+}: Props) {
   const combien = mission.nombre ?? 1;
 
   return (
-    <div className="mission-bar">
+    <div className={gagne ? 'mission-bar gagne' : 'mission-bar'}>
       <button className="mission-cible" onClick={onSay} aria-label={`Réécouter : ${mission.enonce}`}>
         {Array.from({ length: combien }, (_, i) => (
           <span className="mission-bloc" key={i}>
@@ -34,17 +44,30 @@ export default function MissionBar({ mission, wardrobe, faites, total, onSay, on
       </button>
 
       <div className="mission-mots">
-        <span className="mission-enonce">{mission.enonce}</span>
+        <span className="mission-enonce">{gagne ? 'Bravo, tu l’as fabriqué !' : mission.enonce}</span>
         <span className="mission-compte">
           {faites} / {total}
         </span>
       </div>
 
-      <button className="icon-btn tiny" onClick={onSkip} aria-label="Une autre mission" title="Une autre">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <polyline points="9 6 15 12 9 18" />
-        </svg>
-      </button>
+      {gagne ? (
+        <span className="mission-coche" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <polyline points="5 13 10 18 19 6" />
+          </svg>
+        </span>
+      ) : (
+        <button
+          className="icon-btn tiny"
+          onClick={onSkip}
+          aria-label="Une autre mission"
+          title="Une autre"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="9 6 15 12 9 18" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

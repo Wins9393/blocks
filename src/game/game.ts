@@ -277,6 +277,28 @@ export class Game {
     this.emit();
   }
 
+  /**
+   * Fête les blocs d'une valeur : ils sautent et se couvrent d'étincelles.
+   *
+   * La réussite se voit d'abord dans la scène, sur le bloc qu'on vient de
+   * fabriquer. Un panneau qui s'ouvre aussitôt cache la forme au moment précis
+   * où l'enfant veut la regarder.
+   */
+  celebrate(value: number) {
+    for (const block of this.world.blocks.values()) {
+      if (block.value !== value) continue;
+      this.sparkle(block.body.position.x, block.body.position.y, block.value, colorFor(value));
+      const visual = this.visuals.get(block.id);
+      if (visual) {
+        visual.pop = 0.5;
+        visual.squash = 0.55;
+      }
+      this.world.wake(block);
+      Body.setVelocity(block.body, { x: block.body.velocity.x, y: -5.5 });
+    }
+    this.dirty = true;
+  }
+
   /** La tenue des blocs de cet espace. */
   setWardrobe(wardrobe: Wardrobe) {
     this.renderer.setWardrobe(wardrobe);

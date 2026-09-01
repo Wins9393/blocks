@@ -22,9 +22,16 @@ describe('le parcours', () => {
     expect(new Set(prix).size).toBe(prix.length);
   });
 
-  it('garde assez de pièces fermées pour les chapitres suivants', () => {
-    const fermees = SLOTS.flatMap((s) => s.pieces.filter((p) => !p.starter));
-    expect(fermees.length).toBeGreaterThan(MISSIONS.length);
+  it('rend toute pièce fermée gagnable', () => {
+    // Une pièce qu'aucune mission ne donne se voit derrière son cadenas sans
+    // qu'aucun chemin n'y mène : c'est une promesse qu'on ne tient pas.
+    const donnees = new Set(MISSIONS.map((m) => `${m.prix.slot}:${m.prix.piece}`));
+    for (const slot of SLOTS) {
+      for (const piece of slot.pieces) {
+        if (piece.starter) continue;
+        expect(donnees.has(`${slot.key}:${piece.id}`), `${slot.key}:${piece.id}`).toBe(true);
+      }
+    }
   });
 
   it('accepte la solution que le fantôme montre', () => {

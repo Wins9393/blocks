@@ -3,6 +3,7 @@ import { Game } from './game/game';
 import type { GameState } from './game/game';
 import { playWin, say, setMuted } from './audio/sfx';
 import { MISSIONS, nextMission } from './core/missions';
+import type { Mission, Prix } from './core/missions';
 import {
   cleanName,
   dropScene,
@@ -44,7 +45,9 @@ export default function App() {
   const [book, setBook] = useState<SpaceBook>(loadSpaces);
   const [wardrobe, setWardrobe] = useState<Wardrobe>(() => loadWardrobe(book.currentId));
   const [progress, setProgress] = useState<Progress>(() => loadProgress(book.currentId));
-  const [prix, setPrix] = useState<{ slot: SlotKey; piece: string } | null>(null);
+  const [prix, setPrix] = useState<Prix | null>(null);
+  /** Mission réussie, le temps de la fêter dans la scène avant le panneau. */
+  const [fete, setFete] = useState<{ mission: Mission; prix: Prix } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -91,17 +94,36 @@ export default function App() {
     setProgress(next);
   }, []);
 
+  // Ce qu'on montre : la mission réussie tant qu'on la fête, la suivante après.
+  const affichee = fete?.mission ?? mission;
+
   // L'énoncé est dit dès qu'il change : c'est ce qui rend le mode utilisable
-  // par un enfant qui ne lit pas encore.
+  // par un enfant qui ne lit pas encore. Pas pendant la fête, la fanfare parle
+  // déjà.
+  const dernierDit = useRef('');
   useEffect(() => {
-    if (mission) say(mission.enonce);
-  }, [mission]);
+    if (fete || prix || !mission) return;
+    if (dernierDit.current === mission.id) return;
+    dernierDit.current = mission.id;
+    say(mission.enonce);
+  }, [mission, fete, prix]);
+
+  // Le panneau attend que la fête soit passée : ouvert aussitôt, il cachait la
+  // forme au moment précis où l'enfant veut la regarder.
+  useEffect(() => {
+    if (!fete) return;
+    const id = setTimeout(() => {
+      setPrix(fete.prix);
+      setFete(null);
+    }, 1600);
+    return () => clearTimeout(id);
+  }, [fete]);
 
   // Le jeu ignore tout des missions : il publie l'état de la scène, et c'est
   // ici qu'on statue. Une mission est un prédicat, pas un script.
   const dernierSucces = useRef('');
   useEffect(() => {
-    if (!mission || prix) return;
+    if (!mission || prix || fete) return;
     const signature = [...state.values].sort((a, b) => a - b).join(',');
     // Sans ce garde-fou, une scène qui satisfait déjà la mission suivante
     // enchaînerait les récompenses sans que l'enfant ait rien fait.
@@ -110,15 +132,18 @@ export default function App() {
 
     dernierSucces.current = signature;
     const cle = pieceKey(mission.prix.slot, mission.prix.piece);
+    // La progression est enregistrée tout de suite : quitter pendant la fête
+    // ne doit pas coûter la récompense.
     avance(book.currentId, {
       ...progress,
       faites: [...progress.faites, mission.id],
       pieces: progress.pieces.includes(cle) ? progress.pieces : [...progress.pieces, cle],
       passees: progress.passees.filter((id) => id !== mission.id),
     });
-    setPrix(mission.prix);
+    setFete({ mission, prix: mission.prix });
+    gameRef.current?.celebrate(mission.cible);
     playWin();
-  }, [state.values, mission, prix, progress, book.currentId, avance]);
+  }, [state.values, mission, prix, fete, progress, book.currentId, avance]);
 
   const commit = useCallback((next: SpaceBook) => {
     saveSpaces(next);
@@ -133,7 +158,9 @@ export default function App() {
     setWardrobe(tenue);
     setProgress(loadProgress(id));
     setPrix(null);
+    setFete(null);
     dernierSucces.current = '';
+    dernierDit.current = '';
     gameRef.current?.useSpace(id);
     gameRef.current?.setWardrobe(tenue);
   };
@@ -218,23 +245,24 @@ export default function App() {
         }}
       />
 
-      {mission && (
+      {affichee && (
         <MissionBar
-          mission={mission}
+          mission={affichee}
           wardrobe={wardrobe}
+          gagne={Boolean(fete)}
           faites={progress.faites.length}
           total={MISSIONS.length}
-          onSay={() => say(mission.enonce)}
+          onSay={() => say(affichee.enonce)}
           onSkip={() =>
             avance(book.currentId, {
               ...progress,
-              passees: [...progress.passees, mission.id],
+              passees: [...progress.passees, affichee.id],
             })
           }
         />
       )}
 
-      {progress.actif && !mission && (
+      {progress.actif && !affichee && (
         <div className="mission-bar">
           <div className="mission-mots">
             <span className="mission-enonce">Toutes les missions sont faites !</span>
@@ -248,7 +276,7 @@ export default function App() {
       <Palette
         state={state}
         wardrobe={wardrobe}
-        allowed={mission?.palette}
+        allowed={affichee?.palette}
         onPick={(v) => gameRef.current?.spawn(v)}
       />
 
