@@ -179,12 +179,18 @@ par le canal le plus fort au lieu de couper chaque canal, sans quoi un bloc
 clair voit son bleu buter à 1 pendant que son rouge monte encore, et vire au
 blanc.
 
-L'éclairage reste doux mais franc : beaucoup d'ambiante, une lampe d'appoint
-sans ombre du côté opposé à la clé — elle relève les faces que la lumière
-principale laisse dans le noir, comme le faisait le dégradé du dessin — et peu
-de spéculaire. La couleur d'un bloc dit quel nombre on regarde ; un éclairage de
-studio, plus joli sur un objet isolé, la ferait bouger avec l'orientation et
-brouillerait la lecture. Le tout coûte **0,2 ms par image** de plus que le trait, avec vingt
+L'éclairage est volontairement doux et à **une seule source**, comme le dessin :
+beaucoup d'ambiante, peu de spéculaire. Une lampe d'appoint du côté opposé
+relevait bien les faces sombres, mais elle allumait aussi les arêtes
+par-derrière et délavait les blocs clairs — essayée, retirée. La couleur d'un
+bloc dit quel nombre on regarde ; un éclairage de studio, plus joli sur un objet
+isolé, la ferait bouger avec l'orientation et brouillerait la lecture.
+
+**L'arrondi des cubes en volume est bien plus serré que celui du tracé** (11 %
+d'un cube contre 20 %). Au rayon du dessin, la rainure entre deux cubes fait
+quatorze pixels et son arête ramasse toute la lumière : le bloc devient un
+chapelet de coussins. Serré, il laisse une rainure fine et les cases se
+comptent mieux. Le tout coûte **0,2 ms par image** de plus que le trait, avec vingt
 blocs et dix accessoires à l'écran.
 
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre

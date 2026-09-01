@@ -29,7 +29,6 @@ import { Forge, MAT_MAT, teinte } from './mesh';
 import type { Maille } from './mesh';
 import { Z, objet3D } from './objets3d';
 import type { SlotObjet } from './objets3d';
-import { CORNER } from './silhouette';
 
 const VERT = `
 attribute vec3 aPos;
@@ -70,9 +69,9 @@ varying float vMat;
 uniform vec3 uOeil;
 vec3 ciel(vec3 d) {
   float t = clamp(-d.y * 0.5 + 0.5, 0.0, 1.0);
-  vec3 c = mix(vec3(0.09, 0.11, 0.15), vec3(0.52, 0.58, 0.74), t);
+  vec3 c = mix(vec3(0.05, 0.06, 0.09), vec3(0.40, 0.46, 0.63), t);
   float lampe = pow(max(dot(d, normalize(vec3(-0.5, -0.76, 0.42))), 0.0), 24.0);
-  return c + vec3(1.0, 0.93, 0.74) * lampe * 1.8;
+  return c + vec3(1.0, 0.93, 0.74) * lampe * 1.6;
 }
 void main() {
   vec3 N = normalize(vN);
@@ -86,25 +85,25 @@ void main() {
   vec3 refl = ciel(reflect(-V, N));
   vec3 c;
   float alpha = 1.0;
-  // Une lampe d'appoint, sans ombre, du côté opposé : elle relève les faces
-  // que la clé laisse dans le noir, comme le dégradé du dessin 2D le faisait.
-  float appoint = max(dot(N, normalize(vec3(0.5, -0.3, 0.8))), 0.0) * 0.22;
+  // Une seule source, comme dans le dessin. Une lampe d'appoint relevait bien
+  // les faces sombres, mais elle éclairait aussi les arêtes par-derrière et
+  // finissait par délaver les blocs clairs.
   if (vMat < 0.5) {
     // Mat : plastique, laine, feutre.
-    c = vCol * (0.7 + 0.46 * diff + appoint) + vCol * refl * 0.16 + vec3(1.0) * spec * 0.18 + vCol * bord * 0.26;
+    c = vCol * (0.56 + 0.46 * diff) + vCol * refl * 0.13 + vec3(1.0) * spec * 0.14 + vCol * bord * 0.26;
   } else if (vMat < 1.5) {
     // Métal : il n'existe que par ce qu'il reflète.
-    c = vCol * (0.3 + 0.5 * diff + appoint) + vCol * refl * 1.25 + vec3(1.0, 0.96, 0.86) * spec * 0.9;
+    c = vCol * (0.2 + 0.42 * diff) + vCol * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
   } else if (vMat < 2.5) {
     // Verre : transparent sur la face, opaque de biais.
-    c = mix(refl, vCol * 0.8, 0.4) + vec3(1.0) * spec * 1.6 + vCol * bord * 0.55;
+    c = mix(refl, vCol * 0.7, 0.4) + vec3(1.0) * spec * 1.5 + vCol * bord * 0.5;
     alpha = clamp(0.26 + bord * 0.6 + spec, 0.0, 1.0);
   } else if (vMat < 3.5) {
     // Lumière : l'auréole ne s'éteint jamais.
-    c = vCol * (0.95 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;
+    c = vCol * (0.9 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;
   } else {
     // Gemme.
-    c = vCol * (0.34 + 0.75 * diff + appoint) + refl * 0.32 + vec3(1.0) * spec * 1.5 + vCol * bord * 0.7;
+    c = vCol * (0.24 + 0.7 * diff) + refl * 0.3 + vec3(1.0) * spec * 1.4 + vCol * bord * 0.7;
   }
   // Écrêtage qui garde la teinte : diviser par le canal le plus fort plutôt
   // que de couper chaque canal séparément. Sans ça, un bloc clair voit son
@@ -145,6 +144,15 @@ const PAS = 0.012;
 
 /** Profondeur qu'occupe un bloc entier, en coordonnées normalisées. */
 const EPAISSEUR_NDC = 0.004;
+
+/**
+ * Arrondi des cubes en volume — nettement plus serré que celui du tracé 2D
+ * (`CORNER`). Au rayon du dessin, la rainure entre deux cubes fait quatorze
+ * pixels de large et son arête ramasse toute la lumière : le bloc n'est plus
+ * qu'un chapelet de coussins. Un cube franc laisse une rainure fine et rend
+ * la lecture des cases plus nette.
+ */
+const ARRONDI = UNIT * 0.11;
 
 /**
  * Recul de l'œil, en multiples du plus grand côté de l'écran. Plus court, la
@@ -465,7 +473,7 @@ export function mailleBloc(value: number): Maille {
   for (const c of cells) {
     f.save();
     f.translate(c.x * UNIT, c.y * UNIT, 0);
-    f.boite([UNIT / 2, UNIT / 2, Z], CORNER, 4);
+    f.boite([UNIT / 2, UNIT / 2, Z], ARRONDI, 3);
     f.restore();
   }
   return f.fini();
