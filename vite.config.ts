@@ -7,7 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      // Les grandes icônes restent hors du préchargement : le système les lit
+      // une fois à l'installation, et les mettre en cache doublerait le poids
+      // du premier chargement pour des fichiers que la page ne demande jamais.
+      includeManifestIcons: false,
+      // Le service ouvrier ne précharge que ce que la page demande : les icônes
+      // du manifeste, elles, sont lues une fois par le système à l'installation.
+      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Blocks',
         short_name: 'Blocks',
@@ -19,8 +25,15 @@ export default defineConfig({
         orientation: 'any',
         start_url: '.',
         icons: [
+          // Le PNG d'abord : iOS ignore le SVG, et une icône masquable en SVG
+          // n'est pas lue par tous les lanceurs Android. Le SVG reste en
+          // dernier pour les fenêtres qui savent l'agrandir sans le flouter.
+          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          // La même, ramenée dans le cercle de sécurité : Android rogne un
+          // disque de 80 % et le bloc y perdrait ses coins.
+          { src: 'maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
         ],
       },
     }),

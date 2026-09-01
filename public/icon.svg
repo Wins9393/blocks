@@ -1,16 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#1d2433"/>
-  <g stroke="#0f141e" stroke-width="8">
-    <rect x="112" y="272" width="128" height="128" rx="30" fill="#5FA8D3"/>
-    <rect x="240" y="272" width="128" height="128" rx="30" fill="#5FA8D3"/>
-    <rect x="176" y="144" width="128" height="128" rx="30" fill="#F4C95D"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Blocks</title>
+  <!--
+    Le bloc de 4, transcrit du rendu du jeu : meme couleur de palette, meme
+    silhouette arrondie d'un seul tenant, meme lumiere venue d'en haut a gauche,
+    meme visage. Les cotes viennent de src/render (UNIT 36 -> 132 px, soit un
+    facteur 11/3) : le logo n'est pas un dessin a part, c'est le personnage.
+
+    Tout tient dans le cercle de securite des icones masquables (rayon 205 sur
+    512), franges comprises, et le fond couvre le carre entier : la meme image
+    sert de tuile ronde, carree ou rognee.
+  -->
+  <defs>
+    <linearGradient id="ciel" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#273049"/>
+      <stop offset="0.42" stop-color="#212940"/>
+      <stop offset="1" stop-color="#171d2c"/>
+    </linearGradient>
+
+    <radialGradient id="vignette" cx="256" cy="236" r="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0.35" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.42"/>
+    </radialGradient>
+
+    <!-- Lisere : il detache le bloc du fond, plus sombre a l'oppose du soleil. -->
+    <linearGradient id="lisere" x1="176" y1="177" x2="336" y2="335" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="rgb(103,183,85)"/>
+      <stop offset="1" stop-color="rgb(64,115,53)"/>
+    </linearGradient>
+
+    <!-- Biseau : il epouse tout le contour, clair du cote de la lumiere. -->
+    <linearGradient id="biseau" x1="169" y1="169" x2="343" y2="343" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="rgb(187,226,179)"/>
+      <stop offset="0.42" stop-color="rgb(131,201,116)"/>
+      <stop offset="0.6" stop-color="rgb(92,164,77)"/>
+      <stop offset="1" stop-color="rgb(60,107,50)"/>
+    </linearGradient>
+
+    <!-- Corps : le foyer est pose vers le soleil, pas au centre du bloc. -->
+    <radialGradient id="corps" cx="183" cy="159" r="358" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="rgb(160,214,149)"/>
+      <stop offset="0.3" stop-color="rgb(129,201,114)"/>
+      <stop offset="0.62" stop-color="#6BBF59"/>
+      <stop offset="1" stop-color="rgb(75,134,62)"/>
+    </radialGradient>
+
+    <clipPath id="dedans">
+      <rect x="124" y="124" width="264" height="264" rx="26.4"/>
+    </clipPath>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#ciel)"/>
+  <rect width="512" height="512" fill="url(#vignette)"/>
+
+  <!-- Le facteur d'echelle est la seule difference entre l'icone ordinaire et
+       l'icone masquable : scripts/icons.sh le ramene a 1 pour rentrer dans le
+       cercle de securite, et le fond, lui, couvre le carre dans les deux cas. -->
+  <g transform="translate(256 268) scale(1.35) translate(-256 -256)">
+  <!-- Le bloc : lisere, biseau, corps, du plus large au plus etroit. -->
+  <rect x="120" y="120" width="272" height="272" rx="30.4" fill="url(#lisere)"/>
+  <rect x="124" y="124" width="264" height="264" rx="26.4" fill="url(#biseau)"/>
+  <rect x="137.2" y="137.2" width="237.6" height="237.6" rx="13.2" fill="url(#corps)"/>
+
+  <!-- Rainures : un creux sombre double d'un trait clair du cote eclaire.
+       C'est ce couple qui les fait lire comme creusees, et c'est lui qui laisse
+       compter les quatre cubes. -->
+  <g clip-path="url(#dedans)" fill="none" stroke-linecap="round">
+    <g stroke="#0c101a" stroke-opacity="0.22" stroke-width="6.2">
+      <path d="M256 124V388M124 256H388"/>
+    </g>
+    <g stroke="#fff" stroke-opacity="0.17" stroke-width="4.8">
+      <path d="M261.5 124V388M124 261.5H388"/>
+    </g>
   </g>
-  <g fill="#fff">
-    <ellipse cx="212" cy="196" rx="17" ry="21"/>
-    <ellipse cx="268" cy="196" rx="17" ry="21"/>
+
+  <!-- Le visage, sur le cube que le jeu designe : le plus haut, le plus centre.
+       Pour un carre de quatre, c'est celui d'en haut a gauche. -->
+  <g transform="translate(190 190)">
+    <!-- Frange carree : les cheveux prennent une teinte du bloc, ils font
+         partie du personnage. -->
+    <rect x="-55.4" y="-88.4" width="110.9" height="29" rx="6.6" fill="rgb(47,84,39)"/>
+
+    <g stroke="rgb(47,84,39)" stroke-width="7.3" stroke-linecap="round">
+      <path d="M-41.3-38.3h14.8M26.5-38.3h14.8"/>
+    </g>
+
+    <g>
+      <ellipse cx="-27.7" cy="-5.9" rx="17.5" ry="21.7" fill="#0c101a" fill-opacity="0.16"/>
+      <ellipse cx="27.7" cy="-5.9" rx="17.5" ry="21.7" fill="#0c101a" fill-opacity="0.16"/>
+      <ellipse cx="-27.7" cy="-9.2" rx="16.5" ry="22.5" fill="#FDFDFD"/>
+      <ellipse cx="27.7" cy="-9.2" rx="16.5" ry="22.5" fill="#FDFDFD"/>
+      <ellipse cx="-27.7" cy="-9.2" rx="8.2" ry="12" fill="rgb(24,42,20)"/>
+      <ellipse cx="27.7" cy="-9.2" rx="8.2" ry="12" fill="rgb(24,42,20)"/>
+      <circle cx="-30.9" cy="-13.4" r="3.2" fill="#fff" fill-opacity="0.9"/>
+      <circle cx="24.5" cy="-13.4" r="3.2" fill="#fff" fill-opacity="0.9"/>
+    </g>
+
+    <path d="M-17.2 27.7Q0 32.3 17.2 27.7" fill="none" stroke="rgb(24,42,20)"
+      stroke-width="7.3" stroke-linecap="round"/>
   </g>
-  <g fill="#2a2213">
-    <ellipse cx="216" cy="200" rx="8" ry="11"/>
-    <ellipse cx="272" cy="200" rx="8" ry="11"/>
   </g>
 </svg>

@@ -122,6 +122,26 @@ l'élasticité molle du ressort de Matter.
 **Zéro asset.** Sons synthétisés à la volée (Web Audio) et voix via l'API de
 synthèse du navigateur, en français. La PWA pèse ~100 ko compressés.
 
+**L'icône est le bloc de 4, transcrit du rendu du jeu** (`public/icon.svg`) :
+même couleur de palette, même silhouette d'un seul tenant, même lumière venue
+d'en haut à gauche, même visage sur le cube que `pickFace` désigne. Les cotes
+viennent de `src/render`, à un facteur d'échelle près — le logo n'est pas un
+dessin à part, c'est le personnage.
+
+`sh scripts/icons.sh` en tire les quatre PNG du manifeste. Trois détails
+comptent : iOS ignore un `apple-touch-icon` en SVG et affiche alors une capture
+de la page à sa place ; l'icône masquable est la même image ramenée dans le
+cercle de sécurité, parce qu'Android rogne un disque de 80 % et que le bloc
+dessiné bord à bord y perdrait ses coins ; et le fond couvre le carré entier,
+donc la même image sert de tuile ronde, carrée ou rognée.
+
+Le rasteriseur de macOS trame ses dégradés — un bruit d'un point par pixel,
+invisible à l'œil mais fatal à la compression : l'icône de 512 pesait 197 ko.
+`scripts/png-lisse.mjs` arrondit chaque canal à un pas de 4 et ré-encode en RVB,
+ce qui la ramène à 48 ko sans différence visible. Les grandes icônes restent
+hors du préchargement : le système les lit une fois à l'installation, la page ne
+les demande jamais.
+
 ## Les missions
 
 Le mode mission (drapeau dans la barre du haut) enchaîne trente exercices en cinq
@@ -209,6 +229,7 @@ src/render/    canvas 2D
 src/audio/     synthèse sonore et voix
 src/game/      orchestration, boucle à pas fixe, sauvegarde
 src/ui/        React : barres, atelier, espaces et aide — rien de la scène
+scripts/       fabrication des icônes de la PWA, hors du bundle
 ```
 
 React ne sert que pour l'habillage. La boucle de jeu vit en dehors de React et

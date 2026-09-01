@@ -400,8 +400,13 @@ function drawBrows(ctx: CanvasRenderingContext2D, kind: BrowKind, ink: Ink) {
       ctx.lineTo(cx + demi, y);
     } else if (kind === 'faches') {
       // Le bord intérieur plonge vers le nez : c'est ça qui fait la colère.
-      ctx.moveTo(cx - s * demi, y - U * 0.03);
-      ctx.lineTo(cx + s * demi, y + U * 0.05);
+      // La pente inverse donne exactement l'air triste — c'est le seul trait
+      // qui sépare les deux, alors on nomme les extrémités plutôt que de se
+      // fier au signe.
+      const interieur = cx - s * demi;
+      const exterieur = cx + s * demi;
+      ctx.moveTo(interieur, y + U * 0.05);
+      ctx.lineTo(exterieur, y - U * 0.03);
     } else {
       const creux = kind === 'hauts' ? U * 0.075 : U * 0.05;
       ctx.moveTo(cx - demi, y + U * 0.02);
