@@ -8,13 +8,19 @@ const VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 interface Props {
   state: GameState;
   wardrobe: Wardrobe;
+  /** Les seuls blocs offerts. Absent = tous. */
+  allowed?: number[];
   onPick: (value: number) => void;
 }
 
-export default function Palette({ state, wardrobe, onPick }: Props) {
+export default function Palette({ state, wardrobe, allowed, onPick }: Props) {
+  // Une mission sous contrainte se lit dans la barre : les blocs interdits ne
+  // sont pas grisés, ils ne sont pas là. Rien à comprendre, rien à enfreindre.
+  const offerts = allowed ? VALUES.filter((v) => allowed.includes(v)) : VALUES;
+
   return (
-    <div className="palette">
-      {VALUES.map((v) => (
+    <div className={allowed ? 'palette restreinte' : 'palette'}>
+      {offerts.map((v) => (
         <BlockChip
           key={v}
           value={v}

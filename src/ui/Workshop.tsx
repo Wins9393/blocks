@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { colorFor } from '../core/palette';
-import { SLOTS, lookFor } from '../core/wardrobe';
+import { SLOTS, isUnlocked, lookFor } from '../core/wardrobe';
 import type { SlotKey, Wardrobe } from '../core/wardrobe';
 import BlockThumb from './BlockThumb';
 import FaceThumb from './FaceThumb';
@@ -9,6 +9,8 @@ const VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 interface Props {
   wardrobe: Wardrobe;
+  /** Les pièces gagnées en mission, sous la forme « emplacement:pièce ». */
+  gagnees: ReadonlySet<string>;
   onChange: (value: number, slot: SlotKey, option: string) => void;
   onReset: (value: number) => void;
   onClose: () => void;
@@ -20,7 +22,7 @@ interface Props {
  * La couleur n'est pas réglable — c'est elle qui dit quel nombre on regarde,
  * et deux blocs repeints à l'identique ne se distingueraient plus.
  */
-export default function Workshop({ wardrobe, onChange, onReset, onClose }: Props) {
+export default function Workshop({ wardrobe, gagnees, onChange, onReset, onClose }: Props) {
   const [value, setValue] = useState(1);
   const [slotKey, setSlotKey] = useState<SlotKey>('eyes');
 
@@ -74,20 +76,39 @@ export default function Workshop({ wardrobe, onChange, onReset, onClose }: Props
         </div>
 
         <div className="option-grid">
-          {slot.pieces.map((piece) => (
+          {slot.pieces.map((piece) => {
+            // Une pièce fermée reste visible : c'est ce qu'on voit sans
+            // l'avoir qui donne envie de la gagner.
+            const ouverte = isUnlocked(slot.key, piece.id, gagnees);
+            const classes = [
+              'option',
+              look[slot.key] === piece.id ? 'current' : '',
+              ouverte ? '' : 'fermee',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            return (
             <button
               key={piece.id}
-              className={look[slot.key] === piece.id ? 'option current' : 'option'}
-              onClick={() => onChange(value, slot.key, piece.id)}
-              aria-label={piece.label}
-              title={piece.label}
+              className={classes}
+              onClick={() => ouverte && onChange(value, slot.key, piece.id)}
+              disabled={!ouverte}
+              aria-label={ouverte ? piece.label : `${piece.label} — à gagner en mission`}
+              title={ouverte ? piece.label : 'À gagner en mission'}
               aria-pressed={look[slot.key] === piece.id}
             >
               {/* Chaque essayage montre le bloc en cours, pas un mannequin :
                   on voit la pièce sur le personnage qu'on est en train d'habiller. */}
               <FaceThumb base={base} look={{ ...look, [slot.key]: piece.id }} />
+              {!ouverte && (
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="cadenas">
+                  <rect x="5" y="11" width="14" height="9" rx="2.5" />
+                  <path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+                </svg>
+              )}
             </button>
-          ))}
+            );
+          })}
         </div>
 
         <button className="btn-ghost wide" onClick={() => onReset(value)} disabled={!touche}>

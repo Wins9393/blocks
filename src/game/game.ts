@@ -33,6 +33,8 @@ export interface GameState {
   units: number;
   canUndo: boolean;
   full: boolean;
+  /** Valeurs des blocs présents : c'est là-dessus que les missions statuent. */
+  values: number[];
 }
 
 interface Visual {
@@ -141,6 +143,7 @@ export class Game {
       units: this.world.totalUnits,
       canUndo: this.undoStack.length > 0,
       full: this.world.totalUnits >= MAX_UNITS,
+      values: [...this.world.blocks.values()].map((b) => b.value),
     };
   }
 

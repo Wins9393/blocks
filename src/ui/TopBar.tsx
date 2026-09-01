@@ -8,6 +8,8 @@ interface Props {
   state: GameState;
   muted: boolean;
   onOpenSpaces: () => void;
+  missionsOn: boolean;
+  onToggleMissions: () => void;
   onWorkshop: () => void;
   onUndo: () => void;
   onClear: () => void;
@@ -24,6 +26,8 @@ export default function TopBar({
   state,
   muted,
   onOpenSpaces,
+  missionsOn,
+  onToggleMissions,
   onWorkshop,
   onUndo,
   onClear,
@@ -53,6 +57,18 @@ export default function TopBar({
       </button>
 
       <div className="topbar-tools">
+        <button
+          className={`icon-btn small ${missionsOn ? 'allume' : ''}`}
+          onClick={onToggleMissions}
+          aria-pressed={missionsOn}
+          aria-label={missionsOn ? 'Revenir au jeu libre' : 'Passer en missions'}
+          title={missionsOn ? 'Jeu libre' : 'Missions'}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 21V4h11l-1.6 3.4L17 11H6" />
+          </svg>
+        </button>
+
         <button
           className="icon-btn small"
           onClick={onWorkshop}

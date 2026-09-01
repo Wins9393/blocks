@@ -260,6 +260,21 @@ export function pieceFor(key: SlotKey, id: string): Piece | undefined {
   return slotFor(key).pieces.find((piece) => piece.id === id);
 }
 
+/** Clé d'une pièce dans la liste de ce qu'un espace a gagné. */
+export function pieceKey(slot: SlotKey, id: string): string {
+  return `${slot}:${id}`;
+}
+
+/**
+ * Une pièce est portable si elle est livrée d'origine ou gagnée en mission.
+ * Une pièce inconnue passe : une sauvegarde d'avant ne doit pas coincer.
+ */
+export function isUnlocked(slot: SlotKey, id: string, gagnees: ReadonlySet<string>): boolean {
+  const piece = pieceFor(slot, id);
+  if (!piece) return true;
+  return Boolean(piece.starter) || gagnees.has(pieceKey(slot, id));
+}
+
 /** Les pièces dont le dessin bouge : elles ne peuvent pas être mises en cache. */
 export const ANIMEES = new Set<string>(
   SLOTS.flatMap((s) => s.pieces.filter((piece) => piece.anime).map((piece) => `${s.key}:${piece.id}`)),

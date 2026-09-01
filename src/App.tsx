@@ -1,24 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from './game/game';
 import type { GameState } from './game/game';
-import { setMuted } from './audio/sfx';
+import { playWin, say, setMuted } from './audio/sfx';
+import { MISSIONS, nextMission } from './core/missions';
 import {
   cleanName,
   dropScene,
   loadPrefs,
   loadSpaces,
   loadWardrobe,
+  loadProgress,
   makeSpace,
   savePrefs,
+  saveProgress,
   saveSpaces,
   saveWardrobe,
 } from './game/persist';
-import type { Space, SpaceBook } from './game/persist';
-import { defaultLook } from './core/wardrobe';
+import type { Progress, Space, SpaceBook } from './game/persist';
+import { defaultLook, pieceFor, pieceKey } from './core/wardrobe';
 import type { SlotKey, Wardrobe } from './core/wardrobe';
 import Hints from './ui/Hints';
+import MissionBar from './ui/MissionBar';
 import NameDialog from './ui/NameDialog';
 import Palette from './ui/Palette';
+import RewardCard from './ui/RewardCard';
 import SpaceMenu from './ui/SpaceMenu';
 import TopBar from './ui/TopBar';
 import Workshop from './ui/Workshop';
@@ -33,10 +38,13 @@ export default function App() {
     units: 0,
     canUndo: false,
     full: false,
+    values: [],
   });
   const [prefs, setPrefs] = useState(loadPrefs);
   const [book, setBook] = useState<SpaceBook>(loadSpaces);
   const [wardrobe, setWardrobe] = useState<Wardrobe>(() => loadWardrobe(book.currentId));
+  const [progress, setProgress] = useState<Progress>(() => loadProgress(book.currentId));
+  const [prix, setPrix] = useState<{ slot: SlotKey; piece: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -73,6 +81,45 @@ export default function App() {
     setPrefs((p) => (p.hintsSeen ? p : { ...p, hintsSeen: true }));
   }, []);
 
+  const gagnees = useMemo(() => new Set(progress.pieces), [progress.pieces]);
+  const mission = progress.actif
+    ? nextMission(new Set(progress.faites), new Set(progress.passees))
+    : undefined;
+
+  const avance = useCallback((id: string, next: Progress) => {
+    saveProgress(id, next);
+    setProgress(next);
+  }, []);
+
+  // L'énoncé est dit dès qu'il change : c'est ce qui rend le mode utilisable
+  // par un enfant qui ne lit pas encore.
+  useEffect(() => {
+    if (mission) say(mission.enonce);
+  }, [mission]);
+
+  // Le jeu ignore tout des missions : il publie l'état de la scène, et c'est
+  // ici qu'on statue. Une mission est un prédicat, pas un script.
+  const dernierSucces = useRef('');
+  useEffect(() => {
+    if (!mission || prix) return;
+    const signature = [...state.values].sort((a, b) => a - b).join(',');
+    // Sans ce garde-fou, une scène qui satisfait déjà la mission suivante
+    // enchaînerait les récompenses sans que l'enfant ait rien fait.
+    if (signature === dernierSucces.current) return;
+    if (!mission.check({ values: state.values })) return;
+
+    dernierSucces.current = signature;
+    const cle = pieceKey(mission.prix.slot, mission.prix.piece);
+    avance(book.currentId, {
+      ...progress,
+      faites: [...progress.faites, mission.id],
+      pieces: progress.pieces.includes(cle) ? progress.pieces : [...progress.pieces, cle],
+      passees: progress.passees.filter((id) => id !== mission.id),
+    });
+    setPrix(mission.prix);
+    playWin();
+  }, [state.values, mission, prix, progress, book.currentId, avance]);
+
   const commit = useCallback((next: SpaceBook) => {
     saveSpaces(next);
     setBook(next);
@@ -84,6 +131,9 @@ export default function App() {
   const enterSpace = (id: string) => {
     const tenue = loadWardrobe(id);
     setWardrobe(tenue);
+    setProgress(loadProgress(id));
+    setPrix(null);
+    dernierSucces.current = '';
     gameRef.current?.useSpace(id);
     gameRef.current?.setWardrobe(tenue);
   };
@@ -155,6 +205,8 @@ export default function App() {
         state={state}
         muted={prefs.muted}
         onOpenSpaces={() => setMenuOpen(true)}
+        missionsOn={progress.actif}
+        onToggleMissions={() => avance(book.currentId, { ...progress, actif: !progress.actif })}
         onWorkshop={() => setShopOpen(true)}
         onUndo={() => gameRef.current?.undo()}
         onClear={() => gameRef.current?.clearAll()}
@@ -166,15 +218,57 @@ export default function App() {
         }}
       />
 
-      <Palette state={state} wardrobe={wardrobe} onPick={(v) => gameRef.current?.spawn(v)} />
+      {mission && (
+        <MissionBar
+          mission={mission}
+          wardrobe={wardrobe}
+          faites={progress.faites.length}
+          total={MISSIONS.length}
+          onSay={() => say(mission.enonce)}
+          onSkip={() =>
+            avance(book.currentId, {
+              ...progress,
+              passees: [...progress.passees, mission.id],
+            })
+          }
+        />
+      )}
+
+      {progress.actif && !mission && (
+        <div className="mission-bar">
+          <div className="mission-mots">
+            <span className="mission-enonce">Toutes les missions sont faites !</span>
+            <span className="mission-compte">
+              {MISSIONS.length} / {MISSIONS.length}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <Palette
+        state={state}
+        wardrobe={wardrobe}
+        allowed={mission?.palette}
+        onPick={(v) => gameRef.current?.spawn(v)}
+      />
 
       {hintsOpen && <Hints wardrobe={wardrobe} onClose={closeHints} />}
 
       {/* La liste s'efface pendant la saisie : deux voiles empilés
           assombrissaient la scène au point de la faire disparaître. */}
+      {prix && pieceFor(prix.slot, prix.piece) && (
+        <RewardCard
+          slot={prix.slot}
+          piece={pieceFor(prix.slot, prix.piece)!}
+          wardrobe={wardrobe}
+          onClose={() => setPrix(null)}
+        />
+      )}
+
       {shopOpen && (
         <Workshop
           wardrobe={wardrobe}
+          gagnees={gagnees}
           onChange={dressBlock}
           onReset={resetBlock}
           onClose={() => setShopOpen(false)}

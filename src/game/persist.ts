@@ -5,6 +5,7 @@ const PREFS_KEY = 'blocks.prefs.v1';
 const SPACES_KEY = 'blocks.spaces.v1';
 const SCENE_PREFIX = 'blocks.scene.v2:';
 const LOOK_PREFIX = 'blocks.look.v1:';
+const PROGRESS_PREFIX = 'blocks.progress.v1:';
 /** Sauvegarde d'avant les espaces : elle devient la scène du premier espace. */
 const LEGACY_SCENE_KEY = 'blocks.scene.v1';
 
@@ -140,6 +141,7 @@ export function saveScene(spaceId: string, scene: SavedScene) {
 export function dropScene(spaceId: string) {
   drop(sceneKey(spaceId));
   drop(LOOK_PREFIX + spaceId);
+  drop(PROGRESS_PREFIX + spaceId);
   if (spaceId === DEFAULT_SPACE_ID) drop(LEGACY_SCENE_KEY);
 }
 
@@ -152,6 +154,39 @@ export function loadWardrobe(spaceId: string): Wardrobe {
 
 export function saveWardrobe(spaceId: string, wardrobe: Wardrobe) {
   write(LOOK_PREFIX + spaceId, wardrobe);
+}
+
+// --- progression ----------------------------------------------------------
+
+export interface Progress {
+  /** Identifiants des missions réussies. */
+  faites: string[];
+  /** Pièces gagnées, sous la forme « emplacement:pièce ». */
+  pieces: string[];
+  /** Missions mises de côté : elles repassent en fin de file. */
+  passees: string[];
+  /** Le mode mission est allumé pour cet espace. */
+  actif: boolean;
+}
+
+const AUCUNE_PROGRESSION: Progress = { faites: [], pieces: [], passees: [], actif: false };
+
+const listeDeTextes = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
+export function loadProgress(spaceId: string): Progress {
+  const data = read<Partial<Progress>>(PROGRESS_PREFIX + spaceId);
+  if (!data) return AUCUNE_PROGRESSION;
+  return {
+    faites: listeDeTextes(data.faites),
+    pieces: listeDeTextes(data.pieces),
+    passees: listeDeTextes(data.passees),
+    actif: data.actif === true,
+  };
+}
+
+export function saveProgress(spaceId: string, progress: Progress) {
+  write(PROGRESS_PREFIX + spaceId, progress);
 }
 
 // --- préférences ----------------------------------------------------------

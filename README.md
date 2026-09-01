@@ -114,10 +114,44 @@ l'élasticité molle du ressort de Matter.
 **Zéro asset.** Sons synthétisés à la volée (Web Audio) et voix via l'API de
 synthèse du navigateur, en français. La PWA pèse ~100 ko compressés.
 
+## Les missions
+
+Le mode mission (drapeau dans la barre du haut) enchaîne douze exercices en deux
+chapitres. Chacun affiche **le bloc à fabriquer, en image**, avec son chiffre, et
+le dit à voix haute : un enfant de quatre ans ne lit pas « fabrique un bloc de
+7 », il reconnaît la forme et il l'écoute.
+
+**Une mission est un prédicat sur la scène, jamais une séquence scriptée**
+(`src/core/missions.ts`). « Il existe un bloc de 8 », « il existe deux blocs de
+4 », « il existe un bloc à bosse ». L'enfant y arrive comme il veut, en
+fusionnant, en coupant ou en secouant. Le jeu, lui, ignore tout des missions :
+il publie l'état de la scène, et c'est l'application qui statue.
+
+**Les contraintes de moyens ne sont pas dans le prédicat.** « Fabrique un 9 avec
+seulement des 3 » se traduit par une barre de blocs qui ne montre que le 3. La
+règle est dans ce qui est disponible : rien à lire, rien à enfreindre. Et pour
+« enlève 1 à un 4 », seuls des 4 sont offerts — la soustraction naît de ce qui
+manque dans la barre.
+
+**Le fantôme montre une solution, pas la seule.** « Fabrique un bloc tout carré »
+affiche un 4 ; le prédicat accepte 9, 16, 25. Un test vérifie l'invariant : la
+solution montrée doit toujours valider la mission, sinon l'enfant fait
+exactement ce qu'on lui montre et il ne se passe rien.
+
+**Aucun échec.** Pas de minuteur, pas de vies, pas de mauvaise réponse. Faire 9
+au lieu de 8 ne déclenche rien : on secoue, et voilà. Une mission mise de côté
+repasse en fin de file plutôt que de disparaître.
+
+**Chaque réussite ouvre une pièce de l'atelier**, montrée portée sur un
+personnage plutôt que décrite. Les pièces fermées restent visibles en silhouette
+avec un cadenas : c'est ce qu'on voit sans l'avoir qui donne envie de le gagner.
+Des tests garantissent qu'aucune récompense n'est donnée deux fois, qu'aucune
+n'était déjà disponible, et qu'il en reste assez pour les chapitres suivants.
+
 ## Architecture
 
 ```
-src/core/      formes canoniques, palette, vestiaire, constantes — pur et testé
+src/core/      formes canoniques, palette, vestiaire, missions, constantes — pur et testé
 src/physics/   adaptateur Matter.js : forme → corps composé
 src/input/     reconnaissance de gestes (secousse, coupe) — pur, testé
 src/render/    canvas 2D
@@ -148,7 +182,8 @@ couleurs propres, personnages dessinés pour ce projet, nom original.
 
 ## Suite
 
-- Niveaux d'apprentissage : « fais un bloc de 8 », puis avec contraintes
-  (« fais 17 avec des 3 et des 1 »), le mode libre restant toujours accessible.
+- Chapitres 3 à 5 : les formes, la dizaine, les défis — le vestiaire garde une
+  vingtaine de pièces fermées pour eux.
+- Une carte du parcours, et la collection des pièces gagnées.
 - Multiplication par rectangles (la forme canonique s'y prête déjà).
 - Soudure telle quelle + geste « ranger » qui claque la forme canonique.

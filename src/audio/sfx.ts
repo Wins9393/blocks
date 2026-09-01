@@ -113,6 +113,13 @@ export function playTrash() {
   noise(0.3, 0.14, 900);
 }
 
+/** Petite fanfare montante : la seule récompense sonore du jeu. */
+export function playWin() {
+  [523, 659, 784, 1047].forEach((freq, i) => {
+    tone({ freq, duration: 0.2, type: 'triangle', gain: 0.22, delay: i * 0.09 });
+  });
+}
+
 export function playRefuse() {
   tone({ freq: 220, duration: 0.1, type: 'square', gain: 0.12 });
   tone({ freq: 180, duration: 0.14, type: 'square', gain: 0.12, delay: 0.09 });
@@ -125,7 +132,7 @@ export function playImpact(strength: number) {
 }
 
 /** Dit le nombre à voix haute, en français, sans spammer. */
-export function say(value: number) {
+export function say(value: number | string) {
   if (muted || typeof speechSynthesis === 'undefined') return;
   const now = performance.now();
   if (now - lastSpoken < 320) return;
