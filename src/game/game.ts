@@ -221,19 +221,36 @@ export class Game {
   }
 
   clearAll() {
-    if (this.world.blocks.size === 0) return;
+    if (this.wipe(true)) sfx.playTrash();
+  }
+
+  /**
+   * Range la scène entre deux missions.
+   *
+   * Sans ça, les blocs qui restent valident souvent la mission suivante sans
+   * que l'enfant ait rien fait. Ce n'est pas la corbeille : les blocs se
+   * dispersent sur place, avec le petit son du détachement, et rien ne part
+   * dans la trappe — on range la table, on ne jette pas le travail.
+   */
+  tidy() {
+    if (this.wipe(false)) sfx.playPeel();
+  }
+
+  /** Vide la scène. `versCorbeille` envoie la fournée dans la trappe. */
+  private wipe(versCorbeille: boolean): boolean {
+    if (this.world.blocks.size === 0) return false;
     this.snapshot();
     for (const block of this.world.blocks.values()) {
-      this.burst(block, 2, this.world.trash);
+      this.burst(block, 2, versCorbeille ? this.world.trash : undefined);
     }
     // La corbeille se montre pour avaler la fournée, puis s'efface.
-    this.trashGulp = 1;
+    if (versCorbeille) this.trashGulp = 1;
     this.world.clear();
     this.visuals.clear();
     this.drags.clear();
-    sfx.playTrash();
     this.dirty = true;
     this.emit();
+    return true;
   }
 
   // --- sauvegarde -------------------------------------------------------

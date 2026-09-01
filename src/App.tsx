@@ -122,11 +122,22 @@ export default function App() {
   // Le jeu ignore tout des missions : il publie l'état de la scène, et c'est
   // ici qu'on statue. Une mission est un prédicat, pas un script.
   const dernierSucces = useRef('');
+
+  /**
+   * Chaque mission commence sur une table vide. Les blocs de la mission
+   * précédente validaient souvent la suivante tout seuls : « fabrique un bloc
+   * de 3 » était déjà gagné parce qu'un 3 traînait, et l'enfant recevait une
+   * récompense sans rien faire.
+   */
+  const rangeLaTable = useCallback(() => {
+    gameRef.current?.tidy();
+    dernierSucces.current = '';
+  }, []);
   useEffect(() => {
     if (!mission || prix || fete) return;
     const signature = [...state.values].sort((a, b) => a - b).join(',');
-    // Sans ce garde-fou, une scène qui satisfait déjà la mission suivante
-    // enchaînerait les récompenses sans que l'enfant ait rien fait.
+    // Deuxième garde-fou, derrière le rangement de la table : une même scène
+    // ne paie jamais deux fois.
     if (signature === dernierSucces.current) return;
     if (!mission.check({ values: state.values })) return;
 
@@ -233,7 +244,12 @@ export default function App() {
         muted={prefs.muted}
         onOpenSpaces={() => setMenuOpen(true)}
         missionsOn={progress.actif}
-        onToggleMissions={() => avance(book.currentId, { ...progress, actif: !progress.actif })}
+        onToggleMissions={() => {
+          const actif = !progress.actif;
+          avance(book.currentId, { ...progress, actif });
+          // Entrer en mission, c'est commencer la première : même règle.
+          if (actif) rangeLaTable();
+        }}
         onWorkshop={() => setShopOpen(true)}
         onUndo={() => gameRef.current?.undo()}
         onClear={() => gameRef.current?.clearAll()}
@@ -253,12 +269,13 @@ export default function App() {
           faites={progress.faites.length}
           total={MISSIONS.length}
           onSay={() => say(affichee.enonce)}
-          onSkip={() =>
+          onSkip={() => {
             avance(book.currentId, {
               ...progress,
               passees: [...progress.passees, affichee.id],
-            })
-          }
+            });
+            rangeLaTable();
+          }}
         />
       )}
 
@@ -289,7 +306,10 @@ export default function App() {
           slot={prix.slot}
           piece={pieceFor(prix.slot, prix.piece)!}
           wardrobe={wardrobe}
-          onClose={() => setPrix(null)}
+          onClose={() => {
+            setPrix(null);
+            rangeLaTable();
+          }}
         />
       )}
 

@@ -150,6 +150,16 @@ exactement ce qu'on lui montre et il ne se passe rien.
 au lieu de 8 ne déclenche rien : on secoue, et voilà. Une mission mise de côté
 repasse en fin de file plutôt que de disparaître.
 
+**La table se range entre deux missions.** Les blocs de la mission précédente
+validaient souvent la suivante tout seuls : « fabrique un bloc de 3 » était déjà
+gagné parce qu'un 3 traînait, et l'enfant recevait une récompense sans rien
+faire. La scène repart donc vide à chaque fois — à la fermeture du panneau, en
+passant une mission, et en entrant en mode mission. Ce n'est pas la corbeille :
+les blocs se dispersent sur place, on range la table, on ne jette pas le
+travail. Un test tient l'autre bout de la règle : **rien ne se valide sur une
+scène vide**, sinon le rangement offrirait la mission suivante au lieu de la
+poser.
+
 **La réussite se voit d'abord dans la scène.** Le bloc qu'on vient de fabriquer
 saute et se couvre d'étincelles, le bandeau se dore, et le panneau de récompense
 n'arrive qu'une seconde et demie plus tard : ouvert aussitôt, il cachait la forme
