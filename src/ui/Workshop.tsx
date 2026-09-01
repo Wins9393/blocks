@@ -11,8 +11,6 @@ interface Props {
   wardrobe: Wardrobe;
   /** Les pièces gagnées en mission, sous la forme « emplacement:pièce ». */
   gagnees: ReadonlySet<string>;
-  /** L'atelier montre les blocs comme la scène : au trait, ou en volume. */
-  relief: boolean;
   onChange: (value: number, slot: SlotKey, option: string) => void;
   onReset: (value: number) => void;
   onClose: () => void;
@@ -24,7 +22,7 @@ interface Props {
  * La couleur n'est pas réglable — c'est elle qui dit quel nombre on regarde,
  * et deux blocs repeints à l'identique ne se distingueraient plus.
  */
-export default function Workshop({ wardrobe, gagnees, relief, onChange, onReset, onClose }: Props) {
+export default function Workshop({ wardrobe, gagnees, onChange, onReset, onClose }: Props) {
   const [value, setValue] = useState(1);
   const [slotKey, setSlotKey] = useState<SlotKey>('eyes');
 
@@ -54,14 +52,14 @@ export default function Workshop({ wardrobe, gagnees, relief, onChange, onReset,
               aria-label={`Habiller le bloc ${v}`}
               aria-pressed={v === value}
             >
-              <BlockThumb value={v} wardrobe={wardrobe} relief={relief} />
+              <BlockThumb value={v} wardrobe={wardrobe} />
               <span className="value-num">{v}</span>
             </button>
           ))}
         </div>
 
         <div className="workshop-preview">
-          <BlockThumb value={value} wardrobe={wardrobe} relief={relief} className="preview-art" />
+          <BlockThumb value={value} wardrobe={wardrobe} className="preview-art" />
         </div>
 
         <div className="slot-tabs">
@@ -101,7 +99,7 @@ export default function Workshop({ wardrobe, gagnees, relief, onChange, onReset,
             >
               {/* Chaque essayage montre le bloc en cours, pas un mannequin :
                   on voit la pièce sur le personnage qu'on est en train d'habiller. */}
-              <FaceThumb base={base} look={{ ...look, [slot.key]: piece.id }} relief={relief} />
+              <FaceThumb base={base} look={{ ...look, [slot.key]: piece.id }} />
               {!ouverte && (
                 <svg viewBox="0 0 24 24" aria-hidden="true" className="cadenas">
                   <rect x="5" y="11" width="14" height="9" rx="2.5" />

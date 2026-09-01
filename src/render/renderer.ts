@@ -5,7 +5,7 @@ import type { Sample } from '../input/gestures';
 import type { Wardrobe } from '../core/wardrobe';
 import { DecorCache, drawCharacter } from './faces';
 import type { Pose } from './faces';
-import { LIGHT, PEN, blockPaints, paintBody, paintSeams } from './paint';
+import { LIGHT, PEN } from './paint';
 import { Relief } from './relief';
 import type { BlocRelief } from './relief';
 import { CORNER, blockArt } from './silhouette';
@@ -89,10 +89,12 @@ interface Pose2D {
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private dpr = 1;
-  private largeur = 0;
-  private hauteur = 0;
-  private relief: Relief | null = null;
-  private enRelief = false;
+  /**
+   * Le moteur de volume. Il n'y a plus de dessin de rechange : les blocs et
+   * les objets n'existent qu'en volume, et une machine sans WebGL n'affichera
+   * pas de corps — seuls les visages, la scène et les pastilles restent.
+   */
+  private relief = new Relief();
 
   private badgePaints = new Map<number, CanvasGradient>();
   private faces = new DecorCache();
@@ -117,37 +119,17 @@ export class Renderer {
   setWardrobe(wardrobe: Wardrobe) {
     this.wardrobe = wardrobe;
     this.faces.clear();
-    this.relief?.setWardrobe(wardrobe);
-  }
-
-  /**
-   * Bascule le rendu des blocs et des objets en volume. Le moteur WebGL n'est
-   * bâti qu'au premier passage, et si la machine n'en veut pas, on reste au
-   * dessin : personne ne se retrouve devant un écran vide.
-   */
-  setRelief(on: boolean): boolean {
-    if (on && !this.relief) {
-      const relief = new Relief();
-      if (relief.disponible) {
-        relief.setWardrobe(this.wardrobe);
-        relief.resize(this.largeur, this.hauteur, this.dpr);
-        this.relief = relief;
-      }
-    }
-    this.enRelief = on && Boolean(this.relief?.disponible);
-    return this.enRelief;
+    this.relief.setWardrobe(wardrobe);
   }
 
   resize(width: number, height: number) {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.largeur = width;
-    this.hauteur = height;
     this.faces.setDpr(this.dpr);
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
-    this.relief?.resize(width, height, this.dpr);
+    this.relief.resize(width, height, this.dpr);
   }
 
   draw(scene: Scene) {
@@ -164,8 +146,7 @@ export class Renderer {
     // La pose est calculée une seule fois : elle contient un tremblement
     // tiré au hasard, et le visage doit rester collé à son corps.
     const poses = scene.blocks.map((b) => this.pose2D(b, scene));
-    if (this.enRelief && this.relief) this.drawBlocsRelief(scene, poses);
-    else scene.blocks.forEach((b, i) => this.drawBlock(b, scene, poses[i]));
+    this.drawBlocs(scene, poses);
 
     this.drawTrashFront(scene);
     // Les pastilles passent après tous les blocs : sinon, dans un tas, le
@@ -376,39 +357,13 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawBlock(b: BlockVisual, scene: Scene, p: Pose2D) {
-    const { ctx } = this;
-    const base = colorFor(b.value);
-    if (p.sx <= 0.01) return;
-
-    if (p.dragged) this.drawHalo(p);
-
-    ctx.save();
-    ctx.translate(p.px, p.py);
-    ctx.rotate(p.angle);
-    ctx.scale(p.sx, p.sy);
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    paintBody(ctx, p.art, blockPaints(ctx, p.art, base, p.angle));
-    paintSeams(ctx, p.art, p.angle);
-    this.drawShine(p.art, b.pop);
-    drawCharacter(ctx, b.value, base, {
-      pose: this.pose(b, scene),
-      decor: this.faces,
-      wardrobe: this.wardrobe,
-      time: scene.time,
-    });
-    ctx.restore();
-  }
-
   /**
-   * Les blocs en volume, en trois temps : les corps, puis les visages au
+   * Les blocs, en trois temps : les corps en volume, puis les visages au
    * trait par-dessus, puis les objets qui se posent sur ces visages.
    */
-  private drawBlocsRelief(scene: Scene, poses: Pose2D[]) {
+  private drawBlocs(scene: Scene, poses: Pose2D[]) {
     const { ctx, relief } = this;
-    if (!relief) return;
+    if (!relief.disponible) return;
 
     // Le visage au trait se peint sur la face avant du volume, plus proche de
     // l'œil que le plan du bloc : il reçoit donc la même homothétie que cette
@@ -461,8 +416,6 @@ export class Renderer {
         pose: this.pose(b, scene),
         decor: this.faces,
         wardrobe: this.wardrobe,
-        time: scene.time,
-        sansObjets: true,
       });
       ctx.restore();
     });

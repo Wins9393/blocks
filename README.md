@@ -93,11 +93,15 @@ Le seau est dessiné en deux passes, avant et après les blocs, pour que le bloc
 plonge derrière la paroi avant. Une seule passe et il flottait par-dessus, ou
 disparaissait sous le seau.
 
-**Les blocs et les objets passent en volume d'un bouton** (le cube dans la
-barre du haut). Le rendu WebGL ne remplace pas le moteur 2D, il s'y glisse :
-décor au canvas, puis les corps et ce qui se porte sous le visage, puis les
+**Les blocs et les objets sont en volume, et il n'y a plus que ça.** Le jeu a
+d'abord porté les deux dessins de front, avec un bouton pour basculer ; garder
+deux fois la même garde-robe — une fois au trait, une fois modelée — coûtait
+plus cher que ça ne rendait service, et les deux se répondaient de moins en
+moins. Le rendu WebGL ne remplace pas pour autant le moteur 2D : il s'y glisse.
+Décor au canvas, puis les corps et ce qui se porte sous le visage, puis les
 visages au trait par-dessus, puis les chapeaux et les lunettes qui se posent
-dessus. Les deux passes WebGL partagent un seul tampon de profondeur — seule la
+dessus. Un revers assumé : **sans WebGL, il n'y a plus de repli** — la scène,
+les visages et les pastilles s'affichent, les corps non. Les deux passes WebGL partagent un seul tampon de profondeur — seule la
 couleur est effacée entre elles — et chaque bloc reçoit un z tiré de son ordre
 de dessin : le chapeau d'un bloc du fond passe donc derrière le bloc de devant,
 alors même qu'il est peint après lui.
@@ -151,7 +155,7 @@ mesure :
   avancer un objet l'éloigne aussi du centre de l'écran, donc il remonte
   d'autant qu'on l'avait fait descendre.
 
-**Seuls les objets passent en volume.** Cheveux, sourcils, bouches, moustaches,
+**Seuls les objets sont modelés.** Cheveux, sourcils, bouches, moustaches,
 joues et yeux restent dessinés : le regard suit le doigt et les paupières
 clignent, ce qu'une texture ne saurait pas suivre sans être repeinte à chaque
 image. Deux tests tiennent ce partage — que toute pièce d'objet ait bien un
@@ -226,7 +230,9 @@ ouvre donc un petit menu : *Voix* et *Bruitages*, chacun son interrupteur. Le
 dessin du bouton dit ce qui reste allumé, avec une pastille quand une seule des
 deux est coupée. L'ancien réglage unique (`muted`) est relu une dernière fois au
 chargement : quelqu'un qui avait demandé le silence ne se le voit pas rallumer
-dans son dos.
+dans son dos. Même traitement pour `relief`, du temps où les blocs pouvaient
+revenir au trait : la clé est lue puis jetée, pour ne pas se réécrire
+indéfiniment dans la sauvegarde.
 
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre
 construction *et sa propre garde-robe* (`src/game/persist.ts`). Changer d'espace

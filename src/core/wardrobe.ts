@@ -106,8 +106,6 @@ export interface Piece {
   label: string;
   /** Disponible sans rien avoir gagné. Le reste s'ouvre par les missions. */
   starter?: true;
-  /** Le dessin bouge : il ne peut pas être mis en cache. */
-  anime?: true;
 }
 
 export interface Slot {
@@ -116,11 +114,10 @@ export interface Slot {
   pieces: readonly Piece[];
 }
 
-const p = (id: string, label: string, starter?: true, anime?: true): Piece => ({
+const p = (id: string, label: string, starter?: true): Piece => ({
   id,
   label,
   ...(starter ? { starter } : {}),
-  ...(anime ? { anime } : {}),
 });
 
 /** Le vestiaire, dans l'ordre des onglets de l'atelier. */
@@ -197,8 +194,8 @@ export const SLOTS: readonly Slot[] = [
       p('fleurs', 'la couronne de fleurs'),
       p('chantier', 'le casque de chantier'),
       p('bandana', 'le bandana de pirate'),
-      p('helice', "la casquette à hélice", undefined, true),
-      p('aureole', "l'auréole", undefined, true),
+      p('helice', "la casquette à hélice"),
+      p('aureole', "l'auréole"),
     ],
   },
   {
@@ -245,7 +242,7 @@ export const SLOTS: readonly Slot[] = [
       p('foulard', 'le foulard'),
       p('colRoule', 'le col roulé'),
       p('medaille', "la médaille d'or"),
-      p('cape', 'la cape', undefined, true),
+      p('cape', 'la cape'),
     ],
   },
 ];
@@ -274,11 +271,6 @@ export function isUnlocked(slot: SlotKey, id: string, gagnees: ReadonlySet<strin
   if (!piece) return true;
   return Boolean(piece.starter) || gagnees.has(pieceKey(slot, id));
 }
-
-/** Les pièces dont le dessin bouge : elles ne peuvent pas être mises en cache. */
-export const ANIMEES = new Set<string>(
-  SLOTS.flatMap((s) => s.pieces.filter((piece) => piece.anime).map((piece) => `${s.key}:${piece.id}`)),
-);
 
 function mk(patch: Partial<Look>): Look {
   return {

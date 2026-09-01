@@ -81,11 +81,6 @@ export default function App() {
     savePrefs(prefs);
   }, [prefs]);
 
-  // Le relief se rallume au chargement comme il a été laissé.
-  useEffect(() => {
-    gameRef.current?.setRelief(prefs.relief);
-  }, [prefs.relief]);
-
   const closeHints = useCallback(() => {
     setHintsOpen(false);
     setPrefs((p) => (p.hintsSeen ? p : { ...p, hintsSeen: true }));
@@ -282,8 +277,6 @@ export default function App() {
         state={state}
         voix={prefs.voix}
         bruitages={prefs.bruitages}
-        relief={prefs.relief}
-        onToggleRelief={() => setPrefs((p) => ({ ...p, relief: !p.relief }))}
         onOpenSpaces={() => setMenuOpen(true)}
         missionsOn={progress.actif}
         onToggleMissions={() => {
@@ -360,7 +353,6 @@ export default function App() {
           slot={prix.slot}
           piece={pieceFor(prix.slot, prix.piece)!}
           wardrobe={wardrobe}
-          relief={prefs.relief}
           onClose={() => {
             setPrix(null);
             rangeLaTable();
@@ -382,7 +374,6 @@ export default function App() {
         <Workshop
           wardrobe={wardrobe}
           gagnees={gagnees}
-          relief={prefs.relief}
           onChange={dressBlock}
           onReset={resetBlock}
           onClose={() => setShopOpen(false)}

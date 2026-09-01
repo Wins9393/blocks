@@ -47,12 +47,19 @@ describe('loadPrefs', () => {
   it("garde le silence demandé par l'ancien réglage unique", () => {
     // `muted` coupait tout d'un bloc. Rallumer la voix au chargement, ce serait
     // trahir quelqu'un qui avait justement demandé le silence.
-    memoire({ muted: true, hintsSeen: true, relief: true });
-    expect(loadPrefs()).toMatchObject({ voix: false, bruitages: false, relief: true });
+    memoire({ muted: true, hintsSeen: true });
+    expect(loadPrefs()).toMatchObject({ voix: false, bruitages: false, hintsSeen: true });
   });
 
   it('allume les deux sons par défaut', () => {
     memoire({ hintsSeen: true });
     expect(loadPrefs()).toMatchObject({ voix: true, bruitages: true });
+  });
+
+  it("ne traîne pas l'ancien réglage du relief", () => {
+    // Il n'y a plus qu'un dessin — le volume : la clé ne doit pas se réécrire
+    // indéfiniment dans la sauvegarde.
+    memoire({ relief: false });
+    expect(loadPrefs()).not.toHaveProperty('relief');
   });
 });
