@@ -102,12 +102,28 @@ couleur est effacée entre elles — et chaque bloc reçoit un z tiré de son or
 de dessin : le chapeau d'un bloc du fond passe donc derrière le bloc de devant,
 alors même qu'il est peint après lui.
 
-**La caméra est orthographique et de face**, et ce n'est pas un choix
-esthétique. En perspective, un bloc posé sur le bord montrerait sa tranche : son
-dessin ne coïnciderait plus avec sa forme de collision, et l'enfant vise ce
-qu'il voit. De face, le volume occupe *exactement* les mêmes pixels que le
-trait — un test le vérifie pour les cent valeurs — ce qui permet de poser le
-visage dessiné sur le corps modelé sans qu'il glisse d'un pixel.
+**La caméra est en perspective**, l'œil au milieu de l'écran, à une hauteur
+d'écran de distance (`RECUL`). Le plan médian d'un bloc tombe exactement là où
+la physique le place — ombres, pastilles et aperçus de fusion restent donc calés
+au pixel — et seule son épaisseur fuit : un bloc posé sur un bord montre sa
+tranche, deux à trois pixels sur un téléphone.
+
+Ce n'est pas gratuit et il faut le savoir : la face avant, plus proche de l'œil,
+grandit d'un centième et s'écarte du centre, si bien que le dessin d'un bloc du
+bord ne coïncide plus tout à fait avec sa forme de collision. L'écart reste sous
+les trois pixels, et `RECUL` est la manette — l'allonger ramène vers une vue à
+plat, le raccourcir creuse la fuite et tord les bords.
+
+**Le visage au trait reçoit la même homothétie** (`avantPlan`) : il se peint sur
+la face avant du volume, pas sur le plan médian. Sans cette correction, il
+glisse du corps dès qu'un bloc quitte le milieu de l'écran — deux pixels, mais
+deux pixels qui décollent les yeux de la tête. Dans le repère du bloc, la
+silhouette du volume reste celle du trait : un test le vérifie pour les cent
+valeurs.
+
+**L'ordre de dessin ne recule plus les blocs.** Il se traduit par un simple
+décalage de profondeur dans le nuanceur : sous une perspective, reculer un bloc
+pour l'ordonner l'aurait rapetissé.
 
 **Le bloc en volume est l'union des mêmes rectangles arrondis que le moteur 2D
 assemble déjà** : les cases, plus un pont partout où deux cases se touchent.

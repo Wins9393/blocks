@@ -355,12 +355,13 @@ export class Renderer {
   }
 
   /** Le liseré blanc du bloc tenu : il déborde, donc il passe dessous. */
-  private drawHalo(p: Pose2D) {
+  private drawHalo(p: Pose2D, ou?: { x: number; y: number; sx: number; sy: number }) {
     const { ctx } = this;
+    const a = ou ?? { x: p.px, y: p.py, sx: p.sx, sy: p.sy };
     ctx.save();
-    ctx.translate(p.px, p.py);
+    ctx.translate(a.x, a.y);
     ctx.rotate(p.angle);
-    ctx.scale(p.sx, p.sy);
+    ctx.scale(a.sx, a.sy);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.lineWidth = PEN + 13;
@@ -406,7 +407,20 @@ export class Renderer {
     const { ctx, relief } = this;
     if (!relief) return;
 
-    for (const p of poses) if (p.dragged && p.sx > 0.01) this.drawHalo(p);
+    // Le visage au trait se peint sur la face avant du volume, plus proche de
+    // l'œil que le plan du bloc : il reçoit donc la même homothétie que cette
+    // face, sans quoi il glisserait du corps dès qu'un bloc quitte le centre.
+    const k = relief.avantPlan;
+    const cx = scene.width / 2;
+    const cy = scene.height / 2;
+    const avant = (p: Pose2D) => ({
+      x: cx + (p.px - cx) * k,
+      y: cy + (p.py - cy) * k,
+      sx: p.sx * k,
+      sy: p.sy * k,
+    });
+
+    for (const p of poses) if (p.dragged && p.sx > 0.01) this.drawHalo(p, avant(p));
 
     const blocs: BlocRelief[] = [];
     scene.blocks.forEach((b, i) => {
@@ -430,10 +444,11 @@ export class Renderer {
     scene.blocks.forEach((b, i) => {
       const p = poses[i];
       if (p.sx <= 0.01) return;
+      const a = avant(p);
       ctx.save();
-      ctx.translate(p.px, p.py);
+      ctx.translate(a.x, a.y);
       ctx.rotate(p.angle);
-      ctx.scale(p.sx, p.sy);
+      ctx.scale(a.sx, a.sy);
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       // Les rainures restent dessinées : elles se posent sur la face avant du

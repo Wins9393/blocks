@@ -13,9 +13,12 @@
  * Un chapeau porté par un bloc du fond passe donc bien derrière le bloc de
  * devant, alors même qu'il est peint après lui.
  *
- * La caméra est **orthographique et de face** : un bloc a la même allure où
- * qu'il soit, sa silhouette coïncide au pixel près avec sa forme de collision,
- * et le visage dessiné en 2D se pose exactement sur le corps en volume.
+ * La caméra est **en perspective**, l'œil au milieu de l'écran. Le plan médian
+ * d'un bloc y tombe exactement là où le moteur 2D le place — ombres, pastilles
+ * et aperçus restent donc calés — mais sa face avant, plus proche de l'œil,
+ * grandit d'un centième et s'écarte du centre. Le visage au trait, qui se peint
+ * sur cette face, reçoit la même homothétie (`avantPlan`) : sans elle, il
+ * glisserait du corps dès qu'un bloc s'éloigne du milieu.
  */
 import { UNIT } from '../core/constants';
 import { colorFor } from '../core/palette';
@@ -36,6 +39,7 @@ attribute float aMat;
 uniform mat4 uProj;
 uniform mat4 uModele;
 uniform mat4 uNormale;
+uniform float uBiais;
 varying vec3 vN;
 varying vec3 vP;
 varying vec3 vCol;
@@ -47,6 +51,9 @@ void main() {
   vCol = aCol;
   vMat = aMat;
   gl_Position = uProj * monde;
+  // Le rang de dessin ne se traduit pas en recul — il fausserait la taille
+  // sous une perspective — mais en simple décalage de profondeur.
+  gl_Position.z += uBiais * gl_Position.w;
 }`;
 
 /**
@@ -119,8 +126,23 @@ export interface BlocRelief {
   dragged: boolean;
 }
 
-/** Écart en z entre deux blocs : plus que leur épaisseur, sinon ils se croisent. */
-const PAS = UNIT * 0.8;
+/**
+ * Écart de profondeur entre deux blocs, en coordonnées normalisées. Plus grand
+ * que l'épaisseur d'un bloc (0,006) pour que deux voisins ne s'entrecroisent
+ * pas, assez petit pour que cent cinquante blocs tiennent dans l'intervalle.
+ */
+const PAS = 0.012;
+
+/** Profondeur qu'occupe un bloc entier, en coordonnées normalisées. */
+const EPAISSEUR_NDC = 0.004;
+
+/**
+ * Recul de l'œil, en multiples du plus grand côté de l'écran. Plus court, la
+ * fuite devient franche mais les blocs du bord se tordent ; plus long, on
+ * retombe sur une vue à plat. Un écran de hauteur `h` regardé de `h` : les
+ * blocs des bords montrent leur tranche sans que le milieu se déforme.
+ */
+const RECUL = 1.0;
 
 export class Relief {
   readonly canvas: HTMLCanvasElement;
@@ -170,7 +192,8 @@ export class Relief {
     this.gl = gl;
     this.prog = prog;
     for (const nom of ['aPos', 'aNor', 'aCol', 'aMat']) this.locs[nom] = gl.getAttribLocation(prog, nom);
-    for (const nom of ['uProj', 'uModele', 'uNormale', 'uOeil']) this.uni[nom] = gl.getUniformLocation(prog, nom);
+    for (const nom of ['uProj', 'uModele', 'uNormale', 'uOeil', 'uBiais'])
+      this.uni[nom] = gl.getUniformLocation(prog, nom);
     gl.enable(gl.DEPTH_TEST);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0, 0, 0, 0);
@@ -238,27 +261,55 @@ export class Relief {
     gl.clear(gl.COLOR_BUFFER_BIT | (effaceProfondeur ? gl.DEPTH_BUFFER_BIT : 0));
     gl.useProgram(this.prog);
     gl.uniformMatrix4fv(this.uni.uProj, false, this.projection());
-    gl.uniform3fv(this.uni.uOeil, new Float32Array([this.largeur / 2, this.hauteur / 2, 4000]));
+    gl.uniform3fv(this.uni.uOeil, new Float32Array([this.largeur / 2, this.hauteur / 2, this.oeilZ]));
   }
 
-  /** Orthographique : les pixels du canvas 2D sont les unités du monde. */
+  /** Distance de l'œil au plan médian de la scène, en pixels. */
+  private get oeilZ(): number {
+    return Math.max(this.largeur, this.hauteur, 320) * RECUL;
+  }
+
+  /**
+   * Grossissement de la face avant d'un bloc : c'est elle que le visage au
+   * trait vient couvrir, et elle est plus près de l'œil que le plan médian.
+   */
+  get avantPlan(): number {
+    const d = this.oeilZ;
+    return d / (d - Z);
+  }
+
+  /**
+   * Perspective, l'œil planté au milieu de l'écran et le plan z = 0 à
+   * l'échelle du canvas 2D : un bloc y garde la position que la physique lui
+   * donne, et seule son épaisseur fuit.
+   *
+   * La profondeur reste **linéaire** en z — `w` est remis dans la troisième
+   * ligne — parce qu'on s'en sert pour ordonner les blocs au centième près, et
+   * qu'un 1/z écraserait tout l'intervalle près de l'œil.
+   */
   private projection(): Float32Array {
     const w = this.largeur || 1;
     const h = this.hauteur || 1;
-    const loin = 8000;
-    const pres = -400;
+    const d = this.oeilZ;
+    // Profondeur au repos, et pente choisie pour qu'un bloc entier n'occupe
+    // que `EPAISSEUR_NDC` : le décalage de rang doit rester plus grand que
+    // l'épaisseur d'un bloc, sinon deux voisins s'entrecroisent.
+    const b = 0.9;
+    const a = -b / d - EPAISSEUR_NDC / (2 * Z);
     return new Float32Array([
       2 / w, 0, 0, 0,
       0, -2 / h, 0, 0,
-      // z croît vers le spectateur : il doit décroître en profondeur écran.
-      0, 0, -2 / (loin - pres), 0,
-      -1, 1, (loin + pres) / (loin - pres), 1,
+      // La troisième colonne porte la profondeur et la division perspective :
+      // c'est le -1/d de la dernière ligne qui fait fuir les lointains.
+      0, 0, a, -1 / d,
+      -1, 1, b, 1,
     ]);
   }
 
-  private dessine(t: Tampons | null, modele: Float32Array, normale: Float32Array) {
+  private dessine(t: Tampons | null, modele: Float32Array, normale: Float32Array, biais = 0) {
     const gl = this.gl;
     if (!gl || !t) return;
+    gl.uniform1f(this.uni.uBiais, biais);
     const lie = (buf: WebGLBuffer, loc: number, taille: number) => {
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
       gl.enableVertexAttribArray(loc);
@@ -285,14 +336,16 @@ export class Relief {
     const verres: Array<() => void> = [];
 
     for (const b of blocs) {
-      const { modele, normale } = this.repere(b);
-      this.dessine(this.bloc(b.value), modele, normale);
+      const { modele, normale, biais } = this.repere(b);
+      this.dessine(this.bloc(b.value), modele, normale, biais);
       const look = lookFor(b.value, this.wardrobe);
       const tete = this.tete(b, modele);
       if (look.scarf !== 'rien') {
-        this.dessine(this.piece('scarf', look.scarf, 'corps'), tete, normale);
+        this.dessine(this.piece('scarf', look.scarf, 'corps'), tete, normale, biais);
         const objet = objet3D('scarf', look.scarf);
-        if (objet?.verre) verres.push(() => this.dessine(this.piece('scarf', look.scarf, 'verre'), tete, normale));
+        if (objet?.verre) {
+          verres.push(() => this.dessine(this.piece('scarf', look.scarf, 'verre'), tete, normale, biais));
+        }
       }
     }
 
@@ -310,7 +363,7 @@ export class Relief {
     const verres: Array<() => void> = [];
 
     for (const b of blocs) {
-      const { modele, normale } = this.repere(b);
+      const { modele, normale, biais } = this.repere(b);
       const tete = this.tete(b, modele);
       const look = lookFor(b.value, this.wardrobe);
       for (const slot of ['hat', 'glasses'] as const) {
@@ -321,16 +374,19 @@ export class Relief {
 
         let repere = tete;
         if (objet.flotte) repere = multiplie(tete, translation(0, objet.flotte(time), 0));
-        this.dessine(this.piece(slot, id, 'corps'), repere, normale);
+        this.dessine(this.piece(slot, id, 'corps'), repere, normale, biais);
         if (objet.mobile && objet.poseMobile) {
           const pose = objet.poseMobile(time);
           this.dessine(
             this.piece(slot, id, 'mobile'),
             multiplie(multiplie(repere, translation(0, pose.y, 0)), rotationY(pose.angle)),
             multiplie(normale, rotationY(pose.angle)),
+            biais,
           );
         }
-        if (objet.verre) verres.push(() => this.dessine(this.piece(slot, id, 'verre'), repere, normale));
+        if (objet.verre) {
+          verres.push(() => this.dessine(this.piece(slot, id, 'verre'), repere, normale, biais));
+        }
       }
     }
 
@@ -352,13 +408,15 @@ export class Relief {
   /** Le repère du bloc : même translation, même rotation, même écrasement. */
   private repere(b: BlocRelief) {
     const modele = multiplie(
-      multiplie(translation(b.x, b.y, -b.rang * PAS), rotationZ(b.angle)),
+      multiplie(translation(b.x, b.y, 0), rotationZ(b.angle)),
       echelle(b.sx, b.sy, 1),
     );
     // Les normales ignorent l'écrasement : il est faible, et l'inverser coûte
     // plus cher que ce qu'il apporte.
     const normale = rotationZ(b.angle);
-    return { modele, normale };
+    // L'ordre de dessin devient un simple décalage de profondeur : le bloc ne
+    // recule pas, donc la perspective ne le rapetisse pas.
+    return { modele, normale, biais: -b.rang * PAS };
   }
 
   /** Le repère de la case qui porte le visage, comme `drawCharacter`. */
