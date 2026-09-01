@@ -1,6 +1,6 @@
 import { colorFor } from '../core/palette';
-import { lookFor, lookSignature } from '../render/faces';
-import type { Wardrobe } from '../render/faces';
+import { lookFor, lookSignature } from '../core/wardrobe';
+import type { Wardrobe } from '../core/wardrobe';
 import { drawBlockThumb } from '../render/paint';
 import Painter from './Painter';
 

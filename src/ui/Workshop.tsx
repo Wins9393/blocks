@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { colorFor } from '../core/palette';
-import { SLOTS, lookFor } from '../render/faces';
-import type { SlotKey, Wardrobe } from '../render/faces';
+import { SLOTS, lookFor } from '../core/wardrobe';
+import type { SlotKey, Wardrobe } from '../core/wardrobe';
 import BlockThumb from './BlockThumb';
 import FaceThumb from './FaceThumb';
 
@@ -74,17 +74,18 @@ export default function Workshop({ wardrobe, onChange, onReset, onClose }: Props
         </div>
 
         <div className="option-grid">
-          {slot.options.map((option) => (
+          {slot.pieces.map((piece) => (
             <button
-              key={option}
-              className={look[slot.key] === option ? 'option current' : 'option'}
-              onClick={() => onChange(value, slot.key, option)}
-              aria-label={`${slot.label} : ${option}`}
-              aria-pressed={look[slot.key] === option}
+              key={piece.id}
+              className={look[slot.key] === piece.id ? 'option current' : 'option'}
+              onClick={() => onChange(value, slot.key, piece.id)}
+              aria-label={piece.label}
+              title={piece.label}
+              aria-pressed={look[slot.key] === piece.id}
             >
               {/* Chaque essayage montre le bloc en cours, pas un mannequin :
                   on voit la pièce sur le personnage qu'on est en train d'habiller. */}
-              <FaceThumb base={base} look={{ ...look, [slot.key]: option }} />
+              <FaceThumb base={base} look={{ ...look, [slot.key]: piece.id }} />
             </button>
           ))}
         </div>

@@ -14,8 +14,8 @@ import {
   saveWardrobe,
 } from './game/persist';
 import type { Space, SpaceBook } from './game/persist';
-import { defaultLook } from './render/faces';
-import type { SlotKey, Wardrobe } from './render/faces';
+import { defaultLook } from './core/wardrobe';
+import type { SlotKey, Wardrobe } from './core/wardrobe';
 import Hints from './ui/Hints';
 import NameDialog from './ui/NameDialog';
 import Palette from './ui/Palette';

@@ -2,8 +2,9 @@ import type Matter from 'matter-js';
 import { GROUND_HEIGHT, UNIT } from '../core/constants';
 import { colorFor, parseHex, rgba, shade } from '../core/palette';
 import type { Sample } from '../input/gestures';
+import type { Wardrobe } from '../core/wardrobe';
 import { DecorCache, drawCharacter } from './faces';
-import type { Pose, Wardrobe } from './faces';
+import type { Pose } from './faces';
 import { LIGHT, PEN, blockPaints, paintBody, paintSeams } from './paint';
 import { CORNER, blockArt } from './silhouette';
 import type { BlockArt } from './silhouette';
@@ -322,7 +323,12 @@ export class Renderer {
     paintBody(ctx, art, blockPaints(ctx, art, base, angle));
     paintSeams(ctx, art, angle);
     this.drawShine(art, b.pop);
-    drawCharacter(ctx, b.value, base, this.pose(b, scene), this.faces, this.wardrobe);
+    drawCharacter(ctx, b.value, base, {
+      pose: this.pose(b, scene),
+      decor: this.faces,
+      wardrobe: this.wardrobe,
+      time: scene.time,
+    });
     ctx.restore();
   }
 
@@ -378,9 +384,9 @@ export class Renderer {
     const x = b.body.position.x;
     const w = 21 + label.length * 11;
     const h = 26;
-    // Au-dessus du bloc, et assez haut pour dégager la coiffure : la pastille
-    // coupait la couronne du 10 et les épis du 3.
-    const y = Math.max(h / 2 + 6, b.body.bounds.min.y - 26);
+    // Au-dessus du bloc, et assez haut pour dégager le plus haut des chapeaux :
+    // la pastille coupait la pointe du chapeau de sorcier et les bois de cerf.
+    const y = Math.max(h / 2 + 6, b.body.bounds.min.y - 32);
 
     // Dessiné dans un repère centré sur la pastille : le dégradé ne dépend
     // alors plus de la position, donc il se garde d'une image à l'autre.

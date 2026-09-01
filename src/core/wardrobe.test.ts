@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_VALUE } from '../core/constants';
-import { SLOTS, cleanWardrobe, lookFor } from './faces';
-import type { ResolvedLook, Wardrobe } from './faces';
+import { MAX_VALUE } from './constants';
+import { SLOTS, cleanWardrobe, lookFor } from './wardrobe';
+import type { ResolvedLook, Wardrobe } from './wardrobe';
 
 const signature = (l: ResolvedLook) => SLOTS.map((s) => l[s.key]).join('/');
 
@@ -10,7 +10,8 @@ describe('lookFor', () => {
     for (let v = 1; v <= MAX_VALUE; v++) {
       const look = lookFor(v);
       for (const slot of SLOTS) {
-        expect(slot.options, `valeur ${v}, ${slot.key}`).toContain(look[slot.key]);
+        const ids = slot.pieces.map((piece) => piece.id);
+        expect(ids, `valeur ${v}, ${slot.key}`).toContain(look[slot.key]);
       }
     }
   });

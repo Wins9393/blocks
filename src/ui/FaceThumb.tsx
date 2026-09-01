@@ -1,5 +1,5 @@
-import { lookSignature } from '../render/faces';
-import type { ResolvedLook } from '../render/faces';
+import { lookSignature } from '../core/wardrobe';
+import type { ResolvedLook } from '../core/wardrobe';
 import { drawFaceThumb } from '../render/paint';
 import Painter from './Painter';
 

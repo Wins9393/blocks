@@ -1,4 +1,4 @@
-import type { Wardrobe } from '../render/faces';
+import type { Wardrobe } from '../core/wardrobe';
 import BlockThumb from './BlockThumb';
 
 interface Props {

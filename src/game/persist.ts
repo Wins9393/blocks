@@ -1,5 +1,5 @@
-import { cleanWardrobe } from '../render/faces';
-import type { Wardrobe } from '../render/faces';
+import { cleanWardrobe } from '../core/wardrobe';
+import type { Wardrobe } from '../core/wardrobe';
 
 const PREFS_KEY = 'blocks.prefs.v1';
 const SPACES_KEY = 'blocks.spaces.v1';

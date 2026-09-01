@@ -1,7 +1,7 @@
 import { UNIT } from '../core/constants';
 import { shade } from '../core/palette';
+import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { drawCharacter, drawHead } from './faces';
-import type { ResolvedLook, Wardrobe } from './faces';
 import { CORNER, blockArt } from './silhouette';
 import type { BlockArt } from './silhouette';
 
@@ -190,7 +190,7 @@ export function drawBlockThumb(
   ctx.scale(scale, scale);
   paintBody(ctx, art, blockPaints(ctx, art, base, 0));
   paintSeams(ctx, art, 0);
-  drawCharacter(ctx, value, base, undefined, undefined, wardrobe);
+  drawCharacter(ctx, value, base, { wardrobe });
   ctx.restore();
 }
 

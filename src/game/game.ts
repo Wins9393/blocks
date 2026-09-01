@@ -20,7 +20,7 @@ import { ShakeDetector, partitionByCut, segmentHitsBox, sliceFromPath } from '..
 import type { Cut, Sample } from '../input/gestures';
 import { World, minPartGap, rightingSpin } from '../physics/world';
 import type { Block } from '../physics/world';
-import type { Wardrobe } from '../render/faces';
+import type { Wardrobe } from '../core/wardrobe';
 import { Renderer } from '../render/renderer';
 import type { BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
 import { loadScene, saveScene } from './persist';

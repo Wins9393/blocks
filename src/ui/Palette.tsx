@@ -1,6 +1,6 @@
 import { MAX_UNITS } from '../core/constants';
 import type { GameState } from '../game/game';
-import type { Wardrobe } from '../render/faces';
+import type { Wardrobe } from '../core/wardrobe';
 import BlockChip from './BlockChip';
 
 const VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];

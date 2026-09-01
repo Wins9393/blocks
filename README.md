@@ -43,10 +43,21 @@ trait, vingt visages coûtaient 2 ms par image, soit quatre fois le reste de la
 scène. Seuls le regard et les verres sont retracés à chaque tour.
 
 **Les têtes livrées ne sont que des réglages par défaut.** Chaque espace a sa
-garde-robe : yeux, sourcils, bouche, cheveux, chapeau, lunettes, moustache,
-joues et écharpe se choisissent bloc par bloc dans l'atelier. La couleur, elle,
-n'est pas réglable — c'est elle qui dit quel nombre on regarde, et deux blocs
-repeints à l'identique ne se distingueraient plus.
+garde-robe : yeux, sourcils, bouche, cheveux, chapeau, lunettes, barbe, joues et
+cou se choisissent bloc par bloc dans l'atelier. La couleur, elle, n'est pas
+réglable — c'est elle qui dit quel nombre on regarde, et deux blocs repeints à
+l'identique ne se distingueraient plus.
+
+**Les cheveux appartiennent au personnage, les accessoires sont des objets.**
+C'est la règle qui gouverne les couleurs (`src/render/faces.ts`). Une chevelure
+prend une teinte du bloc ; un bonnet est en laine rouge, une casquette en denim,
+une couronne en or à trois gemmes. Quand toutes les pièces étaient teintées de
+la couleur du bloc, le personnage n'avait pas l'air habillé — il avait l'air
+peint, et rien ne donnait envie d'être débloqué.
+
+Deux ou trois pièces bougent : l'hélice tourne, l'auréole flotte, un reflet
+balaie les lunettes de soleil. Elles sont exclues du cache de têtes, et c'est le
+meilleur rapport effet/effort de toute la garde-robe.
 
 La garde-robe ne garde que les écarts au réglage d'origine : reprendre la pièce
 livrée l'oublie, ce qui rend « remettre comme au début » exact et laisse les
@@ -106,7 +117,7 @@ synthèse du navigateur, en français. La PWA pèse ~100 ko compressés.
 ## Architecture
 
 ```
-src/core/      formes canoniques, palette, constantes — pur, testé, sans dépendance
+src/core/      formes canoniques, palette, vestiaire, constantes — pur et testé
 src/physics/   adaptateur Matter.js : forme → corps composé
 src/input/     reconnaissance de gestes (secousse, coupe) — pur, testé
 src/render/    canvas 2D
