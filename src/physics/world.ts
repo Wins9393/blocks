@@ -1,5 +1,12 @@
 import Matter from 'matter-js';
-import { DRAG_MAX_SPIN, DRAG_STRAIGHTEN, GRAVITY_Y, TRASH_W, UNIT } from '../core/constants';
+import {
+  DRAG_MAX_SPIN,
+  DRAG_STRAIGHTEN,
+  GRAVITY_Y,
+  TRASH_LIP,
+  TRASH_W,
+  UNIT,
+} from '../core/constants';
 import { rectanglesFor, shapeFor } from '../core/shape';
 import type { Shape } from '../core/shape';
 
@@ -46,7 +53,7 @@ export class World {
    * Zone de dépôt de la corbeille. Ce n'est plus un corps : un obstacle posé
    * sur le sol coupait le terrain en deux et récoltait les piles.
    */
-  trash = { x: 0, y: 0, w: TRASH_W, h: TRASH_W * 0.86 };
+  trash = { x: 0, y: 0, w: TRASH_W, h: 44 };
 
   private walls: Matter.Body[] = [];
 
@@ -91,11 +98,10 @@ export class World {
     ];
     Composite.add(this.engine.world, this.walls);
 
-    // Posée au sol dans le coin, là où le pouce arrive sans lâcher le
-    // téléphone. Sa taille suit la largeur disponible.
-    const tw = Math.round(Math.min(TRASH_W, Math.max(76, width * 0.24)));
-    const th = Math.round(tw * 0.86);
-    this.trash = { x: Math.round(width - tw / 2 - 14), y: this.groundY - th / 2, w: tw, h: th };
+    // Une trappe large, creusée dans la bande de sol qui reste visible sous
+    // les blocs : personne n'y construit, donc personne n'y jette par erreur.
+    const tw = Math.round(Math.min(TRASH_W, width * 0.66));
+    this.trash = { x: Math.round(width / 2), y: this.groundY + 24, w: tw, h: 44 };
   }
 
   add(value: number, x: number, y: number, angle = 0, velocity?: Matter.Vector, id?: number): Block {
@@ -146,16 +152,13 @@ export class World {
     Sleeping.set(block.body, false);
   }
 
-  /** Marge généreuse et symétrique : on vise avec un doigt, pas au pixel. */
+  /**
+   * Sous le sol, sur toute la largeur. On ne teste pas une boîte : descendre
+   * le doigt sous la ligne du sol est un geste franc, que rien d'autre ne
+   * demande. Un bloc posé au sol garde le doigt au-dessus de cette ligne.
+   */
   isOverTrash(point: Bounds): boolean {
-    const t = this.trash;
-    const pad = 24;
-    return (
-      point.x > t.x - t.w / 2 - pad &&
-      point.x < t.x + t.w / 2 + pad &&
-      point.y > t.y - t.h / 2 - pad &&
-      point.y < t.y + t.h / 2 + pad
-    );
+    return point.y > this.groundY + TRASH_LIP;
   }
 
   step(dt: number) {

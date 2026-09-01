@@ -50,10 +50,13 @@ export const GROUND_HEIGHT = 26;
 // visible au-dessus : sans bande de sol, les blocs ont l'air de flotter.
 export const BOTTOM_SAFE = 178;
 /**
- * Corbeille : elle ne se montre que pendant un glisser, et n'est plus un corps
- * physique. C'est ça qui libère le terrain — pas sa position. Elle reste donc
- * posée au sol, à portée de pouce : le haut d'un écran de téléphone est occupé
- * par la barre du navigateur et l'encoche, et un doigt ne va pas y déposer
- * quoi que ce soit.
+ * Corbeille : une trappe dans le sol, sous la ligne où les blocs se posent.
+ *
+ * Elle ne se montre que pendant un glisser. Surtout, elle est **hors du
+ * terrain de jeu** : partout ailleurs, elle occupait une place où des blocs
+ * vivent, et glisser un bloc vers un voisin pour le fusionner le jetait à la
+ * poubelle par accident. Sous le sol, aucune fusion ne passe jamais par là.
  */
-export const TRASH_W = 104;
+export const TRASH_W = 280;
+/** Profondeur à franchir sous le sol pour que le lâcher jette le bloc. */
+export const TRASH_LIP = 20;

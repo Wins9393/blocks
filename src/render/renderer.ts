@@ -289,8 +289,8 @@ export class Renderer {
     // côtés et n'a plus l'air d'y entrer.
     const tenir = Math.min(
       1,
-      (scene.trash.w * 0.74) / (art.right - art.left),
-      (scene.trash.h * 0.72) / (art.bottom - art.top),
+      (scene.trash.w * 0.62) / (art.right - art.left),
+      (scene.trash.h * 1.7) / (art.bottom - art.top),
     );
     const k = 1 + (tenir - 1) * b.sink;
     const sx = scale * k * (1 + sq * 0.22);
@@ -525,127 +525,108 @@ export class Renderer {
 
   // --- corbeille ----------------------------------------------------------
 
-  /** Géométrie du seau, partagée par les deux passes. */
-  private trashGeom(trash: Scene['trash']) {
-    const top = -trash.h / 2 + 12;
-    const bot = trash.h / 2;
-    const haut = trash.w / 2;
-    const bas = trash.w * 0.41;
-    const lip = 9;
-
-    // La lèvre avant suit l'ellipse de l'ouverture : c'est elle qui donne au
-    // seau sa profondeur, et c'est derrière elle que le bloc plonge.
-    const corps = new Path2D();
-    corps.moveTo(-haut, top);
-    corps.lineTo(-bas, bot - 12);
-    corps.quadraticCurveTo(-bas, bot, -bas + 12, bot);
-    corps.lineTo(bas - 12, bot);
-    corps.quadraticCurveTo(bas, bot, bas, bot - 12);
-    corps.lineTo(haut, top);
-    corps.ellipse(0, top, haut, lip, 0, 0, Math.PI);
-    corps.closePath();
-
-    return { top, bot, haut, bas, lip, corps };
-  }
-
   private trashPose(trash: Scene['trash'], time: number) {
-    const pulse = trash.hot > 0 ? (0.05 + Math.sin(time / 140) * 0.015) * trash.hot : 0;
-    return (0.84 + 0.16 * trash.show) * (1 + pulse - trash.gulp * 0.18);
+    const pulse = trash.hot > 0 ? (0.04 + Math.sin(time / 140) * 0.012) * trash.hot : 0;
+    return (0.86 + 0.14 * trash.show) * (1 + pulse - trash.gulp * 0.14);
   }
 
   /**
-   * Le fond du seau et son couvercle, posés avant les blocs.
+   * Une trappe creusée dans le sol, sous la ligne où les blocs se posent.
    *
-   * La corbeille n'apparaît que pendant un glisser, et flotte en haut de la
-   * scène : posée en permanence sur le sol, elle occupait un coin du terrain
-   * de jeu et les blocs venaient s'empiler contre elle. Le couvercle se
-   * soulève quand le doigt approche — c'est ce geste qui dit « pose-le ici »,
-   * sans un mot à lire.
+   * Elle n'apparaît que pendant un glisser, et elle est hors du terrain de
+   * jeu : partout ailleurs elle occupait une place où des blocs vivent, et
+   * glisser un bloc vers son voisin pour le fusionner le jetait par accident.
+   * Sous le sol, aucune fusion ne passe jamais par là.
    */
   private drawTrashBack({ trash, time }: Scene) {
     if (trash.show <= 0.01) return;
     const { ctx } = this;
-    const { hot, w } = trash;
-    const { top, haut, lip } = this.trashGeom(trash);
+    const { hot } = trash;
+    const rx = trash.w / 2;
+    const ry = trash.h / 2;
 
     ctx.save();
     ctx.globalAlpha = trash.show;
     ctx.translate(trash.x, trash.y);
-    ctx.scale(this.trashPose(trash, time), this.trashPose(trash, time));
+    const s = this.trashPose(trash, time);
+    ctx.scale(s, s);
 
     if (hot > 0.01) {
-      const halo = ctx.createRadialGradient(0, 0, w * 0.24, 0, 0, w * 0.98);
-      halo.addColorStop(0, `rgba(255, 126, 112, ${(0.36 * hot).toFixed(3)})`);
+      const halo = ctx.createRadialGradient(0, 0, ry, 0, 0, rx * 1.1);
+      halo.addColorStop(0, `rgba(255, 126, 112, ${(0.4 * hot).toFixed(3)})`);
       halo.addColorStop(1, 'rgba(255, 126, 112, 0)');
       ctx.fillStyle = halo;
       ctx.beginPath();
-      ctx.arc(0, 0, w * 0.98, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, rx * 1.1, ry * 2.4, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // L'intérieur : un puits, pas un disque plat.
-    const well = ctx.createRadialGradient(0, top, 1, 0, top, haut);
-    well.addColorStop(0, '#05070c');
-    well.addColorStop(1, mix('#1A2130', '#5E2A22', hot));
-    ctx.fillStyle = well;
+    const puits = ctx.createLinearGradient(0, -ry, 0, ry);
+    puits.addColorStop(0, '#04060b');
+    puits.addColorStop(1, mix('#161D2A', '#63291F', hot));
+    ctx.fillStyle = puits;
     ctx.beginPath();
-    ctx.ellipse(0, top, haut, lip, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = `rgba(226, 238, 255, ${(0.2 + 0.4 * hot).toFixed(2)})`;
-    ctx.lineWidth = 2;
+    // Liseré du bord arrière : c'est lui qui creuse le trou dans le sol.
+    ctx.strokeStyle = `rgba(226, 238, 255, ${(0.2 + 0.45 * hot).toFixed(2)})`;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.ellipse(0, top, haut, lip, 0, Math.PI, 2 * Math.PI);
+    ctx.ellipse(0, 0, rx, ry, 0, Math.PI, 2 * Math.PI);
     ctx.stroke();
-
-    // Couvercle : il pivote sur sa charnière gauche.
-    ctx.save();
-    ctx.translate(-haut - 5, top - 9);
-    ctx.rotate(-0.5 * hot);
-    ctx.fillStyle = mix('#77849F', '#F79881', hot);
-    ctx.beginPath();
-    ctx.roundRect(0, -6, w + 10, 12, 6);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.roundRect(w / 2 - 4, -14, 18, 9, 4.5);
-    ctx.fill();
-    ctx.restore();
 
     ctx.restore();
   }
 
-  /** La paroi avant, posée après les blocs : le bloc lâché plonge derrière. */
+  /** La lèvre avant et les battants : le bloc lâché plonge derrière. */
   private drawTrashFront({ trash, time }: Scene) {
     if (trash.show <= 0.01) return;
     const { ctx } = this;
-    const { hot, w } = trash;
-    const { top, bot, corps } = this.trashGeom(trash);
+    const { hot } = trash;
+    const rx = trash.w / 2;
+    const ry = trash.h / 2;
 
     ctx.save();
     ctx.globalAlpha = trash.show;
     ctx.translate(trash.x, trash.y);
-    ctx.scale(this.trashPose(trash, time), this.trashPose(trash, time));
+    const s = this.trashPose(trash, time);
+    ctx.scale(s, s);
 
-    const shell = ctx.createLinearGradient(0, top, 0, bot);
-    shell.addColorStop(0, mix('#546080', '#F0866F', hot));
-    shell.addColorStop(1, mix('#2C3548', '#C4523B', hot));
-    ctx.fillStyle = shell;
-    ctx.fill(corps);
-    ctx.strokeStyle = `rgba(226, 238, 255, ${(0.2 + 0.35 * hot).toFixed(2)})`;
-    ctx.lineWidth = 2;
-    ctx.stroke(corps);
-
+    // Le bas du trou repasse par-dessus le bloc : sans ça, le bloc flotte
+    // devant la trappe au lieu d'y descendre.
     ctx.save();
-    ctx.clip(corps);
-    ctx.strokeStyle = 'rgba(10, 14, 22, 0.24)';
-    ctx.lineWidth = 3;
-    for (const x of [-w * 0.16, 0, w * 0.16]) {
-      ctx.beginPath();
-      ctx.moveTo(x, top + 14);
-      ctx.lineTo(x * 0.82, bot);
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    const levre = ctx.createLinearGradient(0, ry * 0.1, 0, ry);
+    levre.addColorStop(0, mix('#242D40', '#8C3A2C', hot));
+    levre.addColorStop(1, mix('#3B4762', '#C4523B', hot));
+    ctx.fillStyle = levre;
+    ctx.beginPath();
+    ctx.ellipse(0, ry * 0.62, rx, ry * 0.82, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
+
+    ctx.strokeStyle = `rgba(226, 238, 255, ${(0.24 + 0.4 * hot).toFixed(2)})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI);
+    ctx.stroke();
+
+    // Deux battants qui s'ouvrent quand le doigt approche : c'est le seul
+    // signal qui dit « lâche ici » sans un mot.
+    const fw = rx * 0.34;
+    ctx.fillStyle = mix('#4B5875', '#E8705E', hot);
+    for (const cote of [-1, 1]) {
+      ctx.save();
+      ctx.translate(cote * rx, 0);
+      ctx.rotate(cote * 1.1 * hot);
+      ctx.beginPath();
+      ctx.roundRect(cote < 0 ? 0 : -fw, -5.5, fw, 11, 5.5);
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.restore();
   }

@@ -20,7 +20,7 @@ npm install && npm run dev
 | Glisser un bloc contre un autre, puis lâcher | fusion — un aperçu montre `3 + 4 = 7` avant de valider |
 | Tenir un bloc et le **secouer** | détache une unité à chaque secousse |
 | Tracer un **trait franc** à travers un bloc | le coupe en deux là où le trait passe |
-| Glisser un bloc dans la **corbeille** | le supprime (annulable) |
+| Descendre un bloc dans la **trappe du sol** | le supprime (annulable) |
 
 ## Décisions de conception
 
@@ -70,16 +70,24 @@ montre les blocs de 1 à 10 avec leur silhouette réelle et leur personnage : le
 bouton montre exactement ce qu'il pose. Deux dessins séparés auraient divergé au
 premier changement de coiffure.
 
-**La corbeille n'existe que pendant un glisser.** Permanente, elle occupait un
-coin du terrain et récoltait les piles — c'était un obstacle physique autant
-qu'un objet à regarder. Ce n'est plus un corps, et elle n'apparaît que lorsqu'un
-bloc est tenu : c'est ça qui libère la scène, pas sa position. Elle reste donc
-posée au sol, à portée de pouce. Le haut de l'écran d'un téléphone appartient au
-navigateur et à l'encoche ; un doigt n'y dépose rien.
+**La corbeille est une trappe dans le sol, hors du terrain de jeu.** Elle a
+d'abord été un objet posé sur la scène : c'était un obstacle physique autant
+qu'un encombrement, et les blocs venaient s'empiler contre elle. La rendre
+éphémère — elle n'apparaît que lorsqu'un bloc est tenu — a réglé
+l'encombrement, mais pas le vrai problème : **partout dans le terrain, elle
+occupe une place où des blocs vivent**, et glisser un bloc vers son voisin pour
+le fusionner le jetait par accident.
 
-Le couvercle se soulève quand le doigt approche, et le bloc rétrécit juste ce
-qu'il faut pour tenir dans le seau : c'est ce geste qui dit « pose-le ici »,
-sans un mot à lire.
+Elle est donc passée sous la ligne du sol, sur toute la largeur. Aucune fusion
+n'y passe jamais : un bloc posé au sol garde le doigt au-dessus de cette ligne,
+et il faut vingt pixels de plus, vers le bas, pour armer la trappe. Le test
+n'est plus une boîte mais une profondeur — descendre le doigt sous le sol est un
+geste franc que rien d'autre ne demande.
+
+Les battants s'écartent quand le doigt approche, et le bloc rétrécit juste ce
+qu'il faut pour entrer dans l'ouverture : c'est ce geste qui dit « lâche ici »,
+sans un mot à lire. La trappe est dessinée en deux passes, avant et après les
+blocs, pour que le bloc plonge derrière sa lèvre avant.
 
 Le seau est dessiné en deux passes, avant et après les blocs, pour que le bloc
 plonge derrière la paroi avant. Une seule passe et il flottait par-dessus, ou
