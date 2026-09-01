@@ -5,7 +5,10 @@
  */
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
-let muted = false;
+/** Les notes, les chocs, la fanfare : tout ce qui sort du synthétiseur. */
+let bruitages = true;
+/** La voix qui dit les nombres. */
+let voix = true;
 let lastSpoken = 0;
 
 function audio(): AudioContext | null {
@@ -27,14 +30,22 @@ export function unlockAudio() {
   audio();
 }
 
-export function setMuted(value: boolean) {
-  muted = value;
-  if (master) master.gain.value = value ? 0 : 0.5;
-  if (value && typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+export interface Son {
+  voix: boolean;
+  bruitages: boolean;
 }
 
-export function isMuted() {
-  return muted;
+/**
+ * Deux robinets séparés : la voix fatigue souvent avant les bruitages — on la
+ * coupe dans le bus, on garde les notes — et l'inverse arrive tout autant.
+ */
+export function setSound(son: Son) {
+  voix = son.voix;
+  bruitages = son.bruitages;
+  // Le gain général suffit pour les bruitages déjà lancés : une note en train
+  // de sonner se tait dans l'instant au lieu de finir sa course.
+  if (master) master.gain.value = bruitages ? 0.5 : 0;
+  if (!voix && typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
 }
 
 interface ToneOptions {
@@ -48,7 +59,7 @@ interface ToneOptions {
 
 function tone({ freq, duration, type = 'sine', gain = 0.3, delay = 0, sweepTo }: ToneOptions) {
   const c = audio();
-  if (!c || !master || muted) return;
+  if (!c || !master || !bruitages) return;
   const t0 = c.currentTime + delay;
   const osc = c.createOscillator();
   const env = c.createGain();
@@ -65,7 +76,7 @@ function tone({ freq, duration, type = 'sine', gain = 0.3, delay = 0, sweepTo }:
 
 function noise(duration: number, gain: number, cutoff: number) {
   const c = audio();
-  if (!c || !master || muted) return;
+  if (!c || !master || !bruitages) return;
   const frames = Math.floor(c.sampleRate * duration);
   const buffer = c.createBuffer(1, frames, c.sampleRate);
   const data = buffer.getChannelData(0);
@@ -133,7 +144,7 @@ export function playImpact(strength: number) {
 
 /** Dit le nombre à voix haute, en français, sans spammer. */
 export function say(value: number | string) {
-  if (muted || typeof speechSynthesis === 'undefined') return;
+  if (!voix || typeof speechSynthesis === 'undefined') return;
   const now = performance.now();
   if (now - lastSpoken < 320) return;
   lastSpoken = now;

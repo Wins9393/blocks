@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from './game/game';
 import type { GameState } from './game/game';
-import { playWin, say, setMuted } from './audio/sfx';
+import { playWin, say, setSound } from './audio/sfx';
 import { MISSIONS, missionById, nextMission, paletteFor } from './core/missions';
 import type { Mission, Prix } from './core/missions';
 import {
@@ -77,7 +77,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setMuted(prefs.muted);
+    setSound({ voix: prefs.voix, bruitages: prefs.bruitages });
     savePrefs(prefs);
   }, [prefs]);
 
@@ -280,7 +280,8 @@ export default function App() {
       <TopBar
         space={current}
         state={state}
-        muted={prefs.muted}
+        voix={prefs.voix}
+        bruitages={prefs.bruitages}
         relief={prefs.relief}
         onToggleRelief={() => setPrefs((p) => ({ ...p, relief: !p.relief }))}
         onOpenSpaces={() => setMenuOpen(true)}
@@ -294,7 +295,8 @@ export default function App() {
         onWorkshop={() => setShopOpen(true)}
         onUndo={() => gameRef.current?.undo()}
         onClear={() => gameRef.current?.clearAll()}
-        onToggleMute={() => setPrefs((p) => ({ ...p, muted: !p.muted }))}
+        onToggleVoix={() => setPrefs((p) => ({ ...p, voix: !p.voix }))}
+        onToggleBruitages={() => setPrefs((p) => ({ ...p, bruitages: !p.bruitages }))}
         onHelp={() => {
           setMenuOpen(false);
           setShopOpen(false);

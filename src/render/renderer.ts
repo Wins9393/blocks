@@ -187,9 +187,9 @@ export class Renderer {
     const { ctx } = this;
 
     const sky = ctx.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, '#273049');
-    sky.addColorStop(0.42, '#212940');
-    sky.addColorStop(1, '#171d2c');
+    sky.addColorStop(0, '#2a3450');
+    sky.addColorStop(0.42, '#252e47');
+    sky.addColorStop(1, '#1d2434');
 
     // Assombrissement des bords, posé sur le fond et non par-dessus la scène :
     // au-dessus, il éteindrait la couleur des blocs, qui est leur identité.
@@ -202,7 +202,10 @@ export class Renderer {
       Math.max(width, height) * 0.78,
     );
     vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.34)');
+    // Un quart d'ombre au bord suffit à recentrer le regard. Au tiers, le bas
+    // de l'écran — là où les blocs finissent toujours par tomber — passait
+    // sous la couleur du décor.
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
 
     const glow = ctx.createRadialGradient(
       width / 2,
@@ -212,8 +215,8 @@ export class Renderer {
       groundY,
       Math.max(width, height) * 0.62,
     );
-    glow.addColorStop(0, 'rgba(126, 158, 220, 0.16)');
-    glow.addColorStop(0.55, 'rgba(126, 158, 220, 0.05)');
+    glow.addColorStop(0, 'rgba(126, 158, 220, 0.22)');
+    glow.addColorStop(0.55, 'rgba(126, 158, 220, 0.07)');
     glow.addColorStop(1, 'rgba(126, 158, 220, 0)');
 
     const slab = ctx.createLinearGradient(0, groundY, 0, groundY + GROUND_HEIGHT + 30);

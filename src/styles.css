@@ -40,7 +40,8 @@ body,
 
 .topbar {
   position: fixed;
-  z-index: 5;
+  /* Au-dessus de la barre de mission : le menu du son descend juste dessus. */
+  z-index: 6;
   top: calc(10px + env(safe-area-inset-top, 0px));
   left: 10px;
   right: 10px;
@@ -561,6 +562,117 @@ button:disabled {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* --- petit menu du son --------------------------------------------------- */
+
+.son-outil {
+  position: relative;
+}
+
+/* Le voile ferme le menu au premier appui à côté — sans lui, le doigt qui
+   veut refermer lâche un bloc dans la scène au passage. */
+.son-fond {
+  position: fixed;
+  inset: 0;
+}
+
+.son-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  width: 206px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 18px 40px rgba(0, 0, 0, 0.5);
+  animation: fade-in 140ms ease both;
+}
+
+.son-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  /* Coupé, la ligne s'éteint : on lit l'état sans avoir à viser l'interrupteur. */
+  opacity: 0.5;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.son-ligne.on {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.son-ligne:active {
+  transform: scale(0.98);
+}
+
+.son-ligne span:first-of-type {
+  flex: 1;
+}
+
+.son-ligne svg {
+  width: 21px;
+  height: 21px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.son-pastille {
+  fill: currentColor;
+  stroke: none;
+}
+
+.son-bascule {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 140ms ease;
+}
+
+.son-bascule::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #cdd6ea;
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.son-ligne.on .son-bascule {
+  background: var(--accent);
+}
+
+.son-ligne.on .son-bascule::after {
+  transform: translateX(16px);
+  background: #3a2b06;
 }
 
 /* --- feuilles : espaces, saisie du nom ---------------------------------- */

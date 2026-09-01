@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { NAME_MAX, cleanName, makeSpace, newSpaceId } from './persist';
+import { describe, expect, it, vi } from 'vitest';
+import { NAME_MAX, cleanName, loadPrefs, makeSpace, newSpaceId } from './persist';
+
+/** Une mémoire de navigateur juste assez grande pour une préférence. */
+function memoire(valeur: unknown) {
+  const sac = new Map([['blocks.prefs.v1', JSON.stringify(valeur)]]);
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => sac.get(k) ?? null,
+    setItem: (k: string, v: string) => void sac.set(k, v),
+    removeItem: (k: string) => void sac.delete(k),
+  });
+}
 
 describe('cleanName', () => {
   it('rogne les espaces et écrase les doublons', () => {
@@ -30,5 +40,19 @@ describe('makeSpace', () => {
     expect(space.name).toBe('Timeo');
     expect(space.tint).toBe(4);
     expect(space.id).toBeTruthy();
+  });
+});
+
+describe('loadPrefs', () => {
+  it("garde le silence demandé par l'ancien réglage unique", () => {
+    // `muted` coupait tout d'un bloc. Rallumer la voix au chargement, ce serait
+    // trahir quelqu'un qui avait justement demandé le silence.
+    memoire({ muted: true, hintsSeen: true, relief: true });
+    expect(loadPrefs()).toMatchObject({ voix: false, bruitages: false, relief: true });
+  });
+
+  it('allume les deux sons par défaut', () => {
+    memoire({ hintsSeen: true });
+    expect(loadPrefs()).toMatchObject({ voix: true, bruitages: true });
   });
 });

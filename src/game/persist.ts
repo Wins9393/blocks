@@ -38,13 +38,16 @@ export interface SpaceBook {
 }
 
 export interface Prefs {
-  muted: boolean;
+  /** La voix qui dit les nombres à haute voix. */
+  voix: boolean;
+  /** Les notes, les chocs, la fanfare. */
+  bruitages: boolean;
   hintsSeen: boolean;
   /** Blocs et objets en volume plutôt qu'au trait. */
   relief: boolean;
 }
 
-const DEFAULT_PREFS: Prefs = { muted: false, hintsSeen: false, relief: false };
+const DEFAULT_PREFS: Prefs = { voix: true, bruitages: true, hintsSeen: false, relief: false };
 
 function read<T>(key: string): T | null {
   try {
@@ -201,7 +204,12 @@ export function saveProgress(spaceId: string, progress: Progress) {
 // --- préférences ----------------------------------------------------------
 
 export function loadPrefs(): Prefs {
-  return { ...DEFAULT_PREFS, ...(read<Partial<Prefs>>(PREFS_KEY) ?? {}) };
+  // `muted` est l'interrupteur d'avant la séparation du son : il coupait tout.
+  // On le relit une dernière fois plutôt que de rallumer la voix dans le dos
+  // de quelqu'un qui avait justement demandé le silence.
+  const { muted, ...garde } = read<Partial<Prefs> & { muted?: boolean }>(PREFS_KEY) ?? {};
+  const prefs = { ...DEFAULT_PREFS, ...garde };
+  return muted ? { ...prefs, voix: false, bruitages: false } : prefs;
 }
 
 export function savePrefs(prefs: Prefs) {

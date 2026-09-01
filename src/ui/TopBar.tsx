@@ -6,7 +6,8 @@ import type { Space } from '../game/persist';
 interface Props {
   space: Space;
   state: GameState;
-  muted: boolean;
+  voix: boolean;
+  bruitages: boolean;
   relief: boolean;
   onToggleRelief: () => void;
   onOpenSpaces: () => void;
@@ -15,7 +16,8 @@ interface Props {
   onWorkshop: () => void;
   onUndo: () => void;
   onClear: () => void;
-  onToggleMute: () => void;
+  onToggleVoix: () => void;
+  onToggleBruitages: () => void;
   onHelp: () => void;
 }
 
@@ -26,7 +28,8 @@ interface Props {
 export default function TopBar({
   space,
   state,
-  muted,
+  voix,
+  bruitages,
   relief,
   onToggleRelief,
   onOpenSpaces,
@@ -35,10 +38,12 @@ export default function TopBar({
   onWorkshop,
   onUndo,
   onClear,
-  onToggleMute,
+  onToggleVoix,
+  onToggleBruitages,
   onHelp,
 }: Props) {
   const [armed, setArmed] = useState(false);
+  const [sonOuvert, setSonOuvert] = useState(false);
 
   // Le bouton « tout effacer » demande deux appuis : un enfant ne vide pas
   // sa construction par accident.
@@ -133,24 +138,64 @@ export default function TopBar({
           )}
         </button>
 
-        <button
-          className="icon-btn small"
-          onClick={onToggleMute}
-          aria-label={muted ? 'Activer le son' : 'Couper le son'}
-          title={muted ? 'Activer le son' : 'Couper le son'}
-        >
-          {muted ? (
+        {/* Un seul interrupteur ne disait pas quoi couper : la voix qui répète
+            les nombres fatigue bien avant les notes, et l'inverse arrive tout
+            autant. Le bouton ouvre donc les deux robinets, et son dessin dit
+            d'un coup d'œil ce qui reste allumé. */}
+        <div className="son-outil">
+          <button
+            className={`icon-btn small ${sonOuvert ? 'allume' : ''}`}
+            onClick={() => setSonOuvert((o) => !o)}
+            aria-expanded={sonOuvert}
+            aria-label="Réglages du son"
+            title="Son"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M5 9h3l4-4v14l-4-4H5z" />
-              <path d="M16 9l5 6M21 9l-5 6" />
+              {voix || bruitages ? (
+                <path d="M16 9a4 4 0 0 1 0 6" />
+              ) : (
+                <path d="M16 9l5 6M21 9l-5 6" />
+              )}
+              {/* Une seule des deux coupée : la pastille prévient qu'il manque
+                  quelque chose, le menu dit quoi. */}
+              {voix !== bruitages && <circle cx="19.5" cy="6" r="2.2" className="son-pastille" />}
             </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 9h3l4-4v14l-4-4H5z" />
-              <path d="M16 9a4 4 0 0 1 0 6" />
-            </svg>
+          </button>
+
+          {sonOuvert && (
+            <>
+              <div className="son-fond" onPointerDown={() => setSonOuvert(false)} />
+              <div className="son-menu" role="group" aria-label="Son">
+                <button
+                  className={`son-ligne ${voix ? 'on' : ''}`}
+                  onClick={onToggleVoix}
+                  aria-pressed={voix}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v5a2.5 2.5 0 0 1-2.5 2.5H11l-4 3.2V15h-.5A2.5 2.5 0 0 1 4 12.5z" />
+                    <path d="M8.5 10h7" />
+                  </svg>
+                  <span>Voix</span>
+                  <span className="son-bascule" aria-hidden="true" />
+                </button>
+                <button
+                  className={`son-ligne ${bruitages ? 'on' : ''}`}
+                  onClick={onToggleBruitages}
+                  aria-pressed={bruitages}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 17V5.6l10-1.8v11" />
+                    <circle cx="6.6" cy="17.2" r="2.6" />
+                    <circle cx="16.6" cy="15.4" r="2.6" />
+                  </svg>
+                  <span>Bruitages</span>
+                  <span className="son-bascule" aria-hidden="true" />
+                </button>
+              </div>
+            </>
           )}
-        </button>
+        </div>
 
         <button
           className="icon-btn small"

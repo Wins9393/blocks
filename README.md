@@ -196,7 +196,22 @@ beaucoup d'ambiante, peu de spéculaire. Une lampe d'appoint du côté opposé
 relevait bien les faces sombres, mais elle allumait aussi les arêtes
 par-derrière et délavait les blocs clairs — essayée, retirée. La couleur d'un
 bloc dit quel nombre on regarde ; un éclairage de studio, plus joli sur un objet
-isolé, la ferait bouger avec l'orientation et brouillerait la lecture.
+isolé, la ferait bouger avec l'orientation et brouillerait la lecture. Ce qui a
+monté, plutôt qu'une seconde lampe, c'est **le fond** : l'ambiante, et surtout la
+moitié basse du ciel d'environnement. Presque noire, elle éteignait tout ce qui
+regarde vers le bas — sur un écran de téléphone, la moitié des faces d'un bloc
+posé. Un bloc rend aujourd'hui **90 %** de sa couleur à plat, contre 80 % avant.
+
+**Un shader mobile n'a pas la précision d'un shader de bureau.** Un fragment sans
+qualificatif tourne en `mediump` — seize bits sur téléphone, trente-deux
+silencieusement sur ordinateur. Deux précautions valent donc pour tout le monde :
+on demande `highp` dès que la carte sait le faire, et **aucune `pow()` ne reçoit
+une base nulle, négative ou supérieure à un**. `pow(0.0, n)` est *indéfini* dans
+la norme GLSL ES et plusieurs pilotes mobiles renvoient NaN ; un seul NaN
+traverse toute la formule, et `max(NaN, 0.0)` rend zéro — le pixel finit en noir
+opaque. Il reste un filet en bout de chaîne : une couleur qui n'est pas
+`>= 0` retombe sur la couleur du bloc. Le relief se perd sur ce pixel, la lecture
+non.
 
 **L'arrondi des cubes en volume est bien plus serré que celui du tracé** (11 %
 d'un cube contre 20 %). Au rayon du dessin, la rainure entre deux cubes fait
@@ -204,6 +219,14 @@ quatorze pixels et son arête ramasse toute la lumière : le bloc devient un
 chapelet de coussins. Serré, il laisse une rainure fine et les cases se
 comptent mieux. Le tout coûte **0,2 ms par image** de plus que le trait, avec vingt
 blocs et dix accessoires à l'écran.
+
+**Le son se coupe en deux robinets.** La voix qui répète les nombres fatigue
+bien avant les notes — et l'inverse arrive tout autant. Le bouton haut-parleur
+ouvre donc un petit menu : *Voix* et *Bruitages*, chacun son interrupteur. Le
+dessin du bouton dit ce qui reste allumé, avec une pastille quand une seule des
+deux est coupée. L'ancien réglage unique (`muted`) est relu une dernière fois au
+chargement : quelqu'un qui avait demandé le silence ne se le voit pas rallumer
+dans son dos.
 
 **Un espace par enfant.** Chaque espace porte un prénom et garde sa propre
 construction *et sa propre garde-robe* (`src/game/persist.ts`). Changer d'espace

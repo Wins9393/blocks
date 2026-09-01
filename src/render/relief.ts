@@ -59,18 +59,42 @@ void main() {
  * L'éclairage est volontairement doux : la couleur d'un bloc dit quel nombre
  * on regarde. Un éclairage de studio, plus joli sur un objet isolé, ferait
  * bouger cette couleur avec l'orientation et brouillerait la lecture.
+ *
+ * Deux précautions valent pour les téléphones, où le fragment tourne en
+ * demi-précision (`mediump` = seize bits) alors qu'un ordinateur lui donne
+ * silencieusement trente-deux :
+ *
+ *   - on demande `highp` dès que la carte sait le faire ;
+ *   - aucune `pow()` ne reçoit une base nulle, négative ou supérieure à un.
+ *
+ * `pow(0.0, n)` est **indéfini** dans la norme GLSL ES, et plusieurs pilotes
+ * mobiles renvoient NaN. Un seul NaN suffit : il traverse toute la formule et
+ * le pixel finit à zéro, c'est-à-dire en noir opaque. C'est ce qui éteignait
+ * des faces entières sur téléphone pendant que le rendu restait juste sur
+ * ordinateur.
  */
 const FRAG = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 varying vec3 vN;
 varying vec3 vP;
 varying vec3 vCol;
 varying float vMat;
 uniform vec3 uOeil;
+/** Une puissance dont la base ne peut ni s'annuler ni dépasser un. */
+float serre(float cosinus, float durete) {
+  return pow(clamp(cosinus, 0.002, 1.0), durete);
+}
 vec3 ciel(vec3 d) {
   float t = clamp(-d.y * 0.5 + 0.5, 0.0, 1.0);
-  vec3 c = mix(vec3(0.05, 0.06, 0.09), vec3(0.40, 0.46, 0.63), t);
-  float lampe = pow(max(dot(d, normalize(vec3(-0.5, -0.76, 0.42))), 0.0), 24.0);
+  // Le bas n'est pas le vide : c'est le sol de la scène, qui renvoie sa part
+  // de lumière. Presque noir, il éteignait tout ce qui regarde vers le bas —
+  // sur un écran de téléphone, c'est la moitié des faces d'un bloc posé.
+  vec3 c = mix(vec3(0.19, 0.21, 0.27), vec3(0.42, 0.48, 0.65), t);
+  float lampe = serre(dot(d, normalize(vec3(-0.5, -0.76, 0.42))), 24.0);
   return c + vec3(1.0, 0.93, 0.74) * lampe * 1.6;
 }
 void main() {
@@ -84,20 +108,21 @@ void main() {
   vec3 L = normalize(vec3(-0.6, -0.8, 0.62));
   vec3 H = normalize(L + V);
   float diff = max(dot(N, L), 0.0);
-  float spec = pow(max(dot(N, H), 0.0), 60.0);
-  float bord = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+  float spec = serre(dot(N, H), 60.0);
+  float bord = serre(1.0 - max(dot(N, V), 0.0), 3.0);
   vec3 refl = ciel(reflect(-V, N));
   vec3 c;
   float alpha = 1.0;
   // Une seule source, comme dans le dessin. Une lampe d'appoint relevait bien
   // les faces sombres, mais elle éclairait aussi les arêtes par-derrière et
-  // finissait par délaver les blocs clairs.
+  // finissait par délaver les blocs clairs. Ce qui a monté, c'est le fond :
+  // la part de lumière qui ne vient d'aucune direction.
   if (vMat < 0.5) {
     // Mat : plastique, laine, feutre.
-    c = vCol * (0.56 + 0.46 * diff) + vCol * refl * 0.13 + vec3(1.0) * spec * 0.14 + vCol * bord * 0.26;
+    c = vCol * (0.65 + 0.44 * diff) + vCol * refl * 0.15 + vec3(1.0) * spec * 0.14 + vCol * bord * 0.26;
   } else if (vMat < 1.5) {
     // Métal : il n'existe que par ce qu'il reflète.
-    c = vCol * (0.2 + 0.42 * diff) + vCol * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
+    c = vCol * (0.24 + 0.42 * diff) + vCol * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
   } else if (vMat < 2.5) {
     // Verre : transparent sur la face, opaque de biais — et d'autant plus
     // couvrant qu'il est sombre. Sans cette part-là, les lunettes de soleil
@@ -110,14 +135,20 @@ void main() {
     c = vCol * (0.9 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;
   } else {
     // Gemme.
-    c = vCol * (0.24 + 0.7 * diff) + refl * 0.3 + vec3(1.0) * spec * 1.4 + vCol * bord * 0.7;
+    c = vCol * (0.3 + 0.7 * diff) + refl * 0.3 + vec3(1.0) * spec * 1.4 + vCol * bord * 0.7;
   }
+  // Filet de sécurité : si un pilote a quand même sorti un NaN, on rend la
+  // couleur du bloc. Le relief se perd sur ce pixel, la lecture non — alors
+  // qu'un NaN, lui, donne du noir. La comparaison est fausse dans les deux
+  // sens quand la valeur est un NaN : c'est le seul test qui le repère.
+  if (!(c.r >= 0.0) || !(c.g >= 0.0) || !(c.b >= 0.0)) c = vCol;
+  c = max(c, 0.0);
   // Écrêtage qui garde la teinte : diviser par le canal le plus fort plutôt
   // que de couper chaque canal séparément. Sans ça, un bloc clair voit son
   // bleu buter à 1 pendant que le rouge monte encore, et il vire au blanc.
-  float fort = max(max(c.r, c.g), c.b);
-  if (fort > 1.0) c /= fort;
-  gl_FragColor = vec4(max(c, 0.0) * alpha, alpha);
+  float fort = max(max(c.r, max(c.g, c.b)), 1.0);
+  alpha = clamp(alpha, 0.0, 1.0);
+  gl_FragColor = vec4(c / fort * alpha, alpha);
 }`;
 
 interface Tampons {
