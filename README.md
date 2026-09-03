@@ -369,6 +369,49 @@ n'était déjà disponible, et surtout que **toute pièce fermée est gagnable**
 pièce qu'aucune mission ne donne se verrait derrière son cadenas sans qu'aucun
 chemin n'y mène, et ce serait une promesse qu'on ne tient pas.
 
+## Le mode construction
+
+Un troisième mode, à côté du jeu libre et des missions : on y bâtit avec des
+matières au lieu de compter avec des nombres. Il est ouvert dès le premier
+lancement — ce qui se gagne dans ce jeu, ce sont les pièces de l'atelier,
+jamais l'accès à quoi que ce soit.
+
+**Trois états qui s'excluent, donc un sélecteur et pas des interrupteurs.** Le
+drapeau des missions était une bascule ; à trois états, deux bascules
+indépendantes ne disent plus laquelle tient, et c'est exactement l'état qu'un
+enfant n'arrive pas à lire. Le sélecteur montre les trois et allume celui qui
+est actif. Il coûte la largeur de deux boutons dans une barre qui n'en avait
+pas à donner : le nom de l'espace, puis son chevron, puis la taille des outils
+cèdent par paliers jusqu'à 320 px. C'est en jeu libre que la barre est la plus
+chargée — l'atelier s'y ajoute, alors qu'un chantier s'en passe.
+
+**Ce qui n'a plus d'objet se retire.** Sur un chantier, l'atelier n'a personne à
+habiller, et le robinet des voix ne commande rien puisque plus aucun nombre
+n'est prononcé : le bouton du son y coupe les bruitages directement, sans
+menu — un menu d'une seule ligne ne vaut pas mieux qu'un interrupteur. Un
+atelier resté joignable depuis la construction serait une porte dérobée entre
+deux mondes qu'on vient de séparer.
+
+**Un espace tient deux scènes qui ne se voient jamais**, `blocks.build.v1:` à
+côté de `blocks.scene.v2:`. Changer de mode range l'une et sort l'autre,
+exactement comme changer d'espace passe d'un rayon à l'autre. Une scène unique
+et partagée aurait demandé de convertir, et la conversion n'a pas de sens dans
+un sens ni dans l'autre : un 7 canonique devient quoi, en matière ? et un
+escalier de chêne repassé en nombres vaut douze cubes sans avoir la forme du 12.
+
+Le jeu libre et les missions, eux, **partagent la même scène**. C'est ce qui fait
+qu'aller de l'un à l'autre ne recharge rien : recharger reconstruirait tous les
+corps et leur ferait perdre leur élan. Le mode fait aussi partie du rayon — un
+espace quitté sur son chantier le retrouve. Le réglage d'avant les trois modes
+(`actif`, un booléen qui ne disait que « en mission ou non ») est relu une
+dernière fois puis jamais réécrit, pour ne pas renvoyer au jeu libre, dans son
+dos, quelqu'un qui avait quitté en mission.
+
+**Il n'y a pour l'instant que le squelette.** Le chantier se pose, se garde et se
+retrouve, mais il se remplit encore des blocs numérotés du jeu libre. Les
+matières, la soudure au point de contact et le monde plus grand que l'écran
+viennent ensuite.
+
 ## Architecture
 
 ```

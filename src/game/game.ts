@@ -26,7 +26,7 @@ import type { Wardrobe } from '../core/wardrobe';
 import { Renderer } from '../render/renderer';
 import type { BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
 import { loadScene, saveScene } from './persist';
-import type { SavedBlock } from './persist';
+import type { SavedBlock, SceneKind } from './persist';
 
 const { Body, Events, Sleeping, Vector } = Matter;
 
@@ -90,6 +90,8 @@ export class Game {
   constructor(
     private canvas: HTMLCanvasElement,
     private spaceId: string,
+    /** Laquelle des deux scènes de l'espace est sur la table. */
+    private kind: SceneKind = 'nombres',
   ) {
     this.renderer = new Renderer(canvas);
   }
@@ -290,7 +292,7 @@ export class Game {
   }
 
   private restore() {
-    const saved = loadScene(this.spaceId);
+    const saved = loadScene(this.spaceId, this.kind);
     // Même vide : charger, c'est aussi vider la scène précédente.
     this.load(saved?.blocks ?? [], saved?.w);
     this.emit();
@@ -325,13 +327,19 @@ export class Game {
   }
 
   /**
-   * Passe à l'espace d'un autre enfant. La scène en cours part d'abord sur
-   * son propre rayon, sinon elle finirait chez le suivant.
+   * Change de rayon : l'espace d'un autre enfant, l'autre scène du même
+   * espace, ou les deux. La scène en cours part d'abord sur son propre rayon,
+   * sinon elle finirait chez le suivant — et le chantier chez les nombres.
+   *
+   * Rester sur le même rayon ne coûte rien : recharger une scène qu'on ne
+   * quitte pas reconstruirait tous les corps et leur ferait perdre leur
+   * élan.
    */
-  useSpace(id: string) {
-    if (id === this.spaceId) return;
+  useSpace(id: string, kind: SceneKind = this.kind) {
+    if (id === this.spaceId && kind === this.kind) return;
     this.flush();
     this.spaceId = id;
+    this.kind = kind;
     this.undoStack.length = 0;
     this.particles.length = 0;
     this.restore();
@@ -343,7 +351,7 @@ export class Game {
   }
 
   private flush = () => {
-    saveScene(this.spaceId, { w: this.world.width, blocks: this.serialize() });
+    saveScene(this.spaceId, this.kind, { w: this.world.width, blocks: this.serialize() });
     this.dirty = false;
   };
 

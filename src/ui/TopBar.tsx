@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { colorFor } from '../core/palette';
 import type { GameState } from '../game/game';
-import type { Space } from '../game/persist';
+import type { Mode, Space } from '../game/persist';
 
 interface Props {
   space: Space;
@@ -9,8 +10,8 @@ interface Props {
   voix: boolean;
   bruitages: boolean;
   onOpenSpaces: () => void;
-  missionsOn: boolean;
-  onToggleMissions: () => void;
+  mode: Mode;
+  onMode: (mode: Mode) => void;
   onWorkshop: () => void;
   onUndo: () => void;
   onClear: () => void;
@@ -18,6 +19,43 @@ interface Props {
   onToggleBruitages: () => void;
   onHelp: () => void;
 }
+
+/**
+ * Jeu libre, missions, construction : trois états qui s'excluent. Un sélecteur
+ * les montre tous les trois et dit lequel est actif — deux interrupteurs
+ * indépendants laissaient l'enfant deviner dans lequel il se trouvait.
+ */
+const MODES: { id: Mode; label: string; icon: ReactNode }[] = [
+  {
+    id: 'libre',
+    label: 'Jeu libre',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="4" width="8" height="8" rx="1.8" />
+        <rect x="12.5" y="12" width="8" height="8" rx="1.8" />
+      </svg>
+    ),
+  },
+  {
+    id: 'missions',
+    label: 'Missions',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 21V4h11l-1.6 3.4L17 11H6" />
+      </svg>
+    ),
+  },
+  {
+    id: 'construction',
+    label: 'Construction',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="14" rx="1.6" />
+        <path d="M3 9.7h18M3 14.3h18M12 5v4.7M8 9.7v4.6M16 9.7v4.6M12 14.3V19" />
+      </svg>
+    ),
+  },
+];
 
 /**
  * Les commandes d'adulte en haut, les blocs en bas : les petites mains ne
@@ -29,8 +67,8 @@ export default function TopBar({
   voix,
   bruitages,
   onOpenSpaces,
-  missionsOn,
-  onToggleMissions,
+  mode,
+  onMode,
   onWorkshop,
   onUndo,
   onClear,
@@ -40,6 +78,10 @@ export default function TopBar({
 }: Props) {
   const [armed, setArmed] = useState(false);
   const [sonOuvert, setSonOuvert] = useState(false);
+  // Sur un chantier, plus aucun nombre n'est prononcé : le robinet des voix ne
+  // commande rien. Un menu d'une seule ligne ne valant pas mieux qu'un
+  // interrupteur, le bouton coupe alors les bruitages directement.
+  const chantier = mode === 'construction';
 
   // Le bouton « tout effacer » demande deux appuis : un enfant ne vide pas
   // sa construction par accident.
@@ -62,29 +104,36 @@ export default function TopBar({
       </button>
 
       <div className="topbar-tools">
-        <button
-          className={`icon-btn small ${missionsOn ? 'allume' : ''}`}
-          onClick={onToggleMissions}
-          aria-pressed={missionsOn}
-          aria-label={missionsOn ? 'Revenir au jeu libre' : 'Passer en missions'}
-          title={missionsOn ? 'Jeu libre' : 'Missions'}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 21V4h11l-1.6 3.4L17 11H6" />
-          </svg>
-        </button>
+        <div className="mode-switch" role="group" aria-label="Mode de jeu">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              className={`mode-btn ${mode === m.id ? 'on' : ''}`}
+              onClick={() => onMode(m.id)}
+              aria-pressed={mode === m.id}
+              aria-label={m.label}
+              title={m.label}
+            >
+              {m.icon}
+            </button>
+          ))}
+        </div>
 
-        <button
-          className="icon-btn small"
-          onClick={onWorkshop}
-          aria-label="Atelier : habiller les blocs"
-          title="Atelier"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 20c0-2 1.4-3.2 3-3.2S10 18 10 20c0 .8-1 1.4-3 1.4S4 20.8 4 20z" />
-            <path d="M8.6 16.2 18.4 5.1a2 2 0 0 1 3 2.6L11 18" />
-          </svg>
-        </button>
+        {/* Personne à habiller sur un chantier : le bouton se retire plutôt
+            que d'ouvrir une porte dérobée vers l'autre monde. */}
+        {mode !== 'construction' && (
+          <button
+            className="icon-btn small"
+            onClick={onWorkshop}
+            aria-label="Atelier : habiller les blocs"
+            title="Atelier"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 20c0-2 1.4-3.2 3-3.2S10 18 10 20c0 .8-1 1.4-3 1.4S4 20.8 4 20z" />
+              <path d="M8.6 16.2 18.4 5.1a2 2 0 0 1 3 2.6L11 18" />
+            </svg>
+          </button>
+        )}
 
         <button
           className="icon-btn small"
@@ -126,25 +175,28 @@ export default function TopBar({
         <div className="son-outil">
           <button
             className={`icon-btn small ${sonOuvert ? 'allume' : ''}`}
-            onClick={() => setSonOuvert((o) => !o)}
-            aria-expanded={sonOuvert}
-            aria-label="Réglages du son"
-            title="Son"
+            onClick={() => (chantier ? onToggleBruitages() : setSonOuvert((o) => !o))}
+            aria-expanded={chantier ? undefined : sonOuvert}
+            aria-pressed={chantier ? bruitages : undefined}
+            aria-label={chantier ? 'Bruitages' : 'Réglages du son'}
+            title={chantier ? 'Bruitages' : 'Son'}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M5 9h3l4-4v14l-4-4H5z" />
-              {voix || bruitages ? (
+              {(chantier ? bruitages : voix || bruitages) ? (
                 <path d="M16 9a4 4 0 0 1 0 6" />
               ) : (
                 <path d="M16 9l5 6M21 9l-5 6" />
               )}
               {/* Une seule des deux coupée : la pastille prévient qu'il manque
                   quelque chose, le menu dit quoi. */}
-              {voix !== bruitages && <circle cx="19.5" cy="6" r="2.2" className="son-pastille" />}
+              {!chantier && voix !== bruitages && (
+                <circle cx="19.5" cy="6" r="2.2" className="son-pastille" />
+              )}
             </svg>
           </button>
 
-          {sonOuvert && (
+          {sonOuvert && !chantier && (
             <>
               <div className="son-fond" onPointerDown={() => setSonOuvert(false)} />
               <div className="son-menu" role="group" aria-label="Son">

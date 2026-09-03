@@ -16,8 +16,9 @@ import {
   saveProgress,
   saveSpaces,
   saveWardrobe,
+  sceneKindFor,
 } from './game/persist';
-import type { Progress, Space, SpaceBook } from './game/persist';
+import type { Mode, Progress, Space, SpaceBook } from './game/persist';
 import { defaultLook, pieceFor, pieceKey } from './core/wardrobe';
 import type { SlotKey, Wardrobe } from './core/wardrobe';
 import Hints from './ui/Hints';
@@ -59,11 +60,12 @@ export default function App() {
   // ensuite `useSpace` qui le fait changer de rayon.
   const firstSpace = useRef(book.currentId);
   const firstWardrobe = useRef(wardrobe);
+  const firstKind = useRef(sceneKindFor(progress.mode));
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const game = new Game(canvas, firstSpace.current);
+    const game = new Game(canvas, firstSpace.current, firstKind.current);
     gameRef.current = game;
     if (import.meta.env.DEV) (window as unknown as { __game?: Game }).__game = game;
     game.mount();
@@ -86,15 +88,17 @@ export default function App() {
     setPrefs((p) => (p.hintsSeen ? p : { ...p, hintsSeen: true }));
   }, []);
 
+  const mode = progress.mode;
   const gagnees = useMemo(() => new Set(progress.pieces), [progress.pieces]);
   const faites = useMemo(() => new Set(progress.faites), [progress.faites]);
   // Une mission choisie sur la carte passe devant le parcours. Un identifiant
   // devenu inconnu — une mission retirée depuis — ne bloque pas : on reprend
   // simplement la suite.
-  const mission = !progress.actif
-    ? undefined
-    : (progress.choisie ? missionById(progress.choisie) : undefined) ??
-      nextMission(faites, new Set(progress.passees));
+  const mission =
+    mode !== 'missions'
+      ? undefined
+      : (progress.choisie ? missionById(progress.choisie) : undefined) ??
+        nextMission(faites, new Set(progress.passees));
 
   const avance = useCallback((id: string, next: Progress) => {
     saveProgress(id, next);
@@ -173,6 +177,26 @@ export default function App() {
   }, [state.values, mission, prix, fete, progress, book.currentId, avance]);
 
   /**
+   * Les trois modes s'excluent : changer de mode range la scène en cours sur
+   * son rayon et sort l'autre. Les nombres et le chantier ne se voient jamais.
+   */
+  const changeMode = (next: Mode) => {
+    if (next === mode) return;
+    avance(book.currentId, { ...progress, mode: next });
+    setShopOpen(false);
+    setCarteOpen(false);
+    setPrix(null);
+    setFete(null);
+    dernierSucces.current = '';
+    dernierDit.current = '';
+    gameRef.current?.useSpace(book.currentId, sceneKindFor(next));
+    // Entrer en mission, c'est commencer la première : la table se range. Après
+    // le changement de scène, jamais avant — sinon c'est le chantier qu'on
+    // rangerait.
+    if (next === 'missions') rangeLaTable();
+  };
+
+  /**
    * Jouer une mission précise, réussie ou non. Elle passe devant le parcours
    * jusqu'à ce qu'elle soit faite, et la table se range comme entre deux
    * missions — sinon la scène en cours la validerait peut-être déjà.
@@ -199,14 +223,17 @@ export default function App() {
   /** Un espace, c'est une scène ET une garde-robe : les deux suivent. */
   const enterSpace = (id: string) => {
     const tenue = loadWardrobe(id);
+    // Le mode fait partie du rayon : un espace quitté sur son chantier le
+    // retrouve, et c'est cette scène-là qu'il faut sortir.
+    const avancement = loadProgress(id);
     setWardrobe(tenue);
-    setProgress(loadProgress(id));
+    setProgress(avancement);
     setPrix(null);
     setFete(null);
     setCarteOpen(false);
     dernierSucces.current = '';
     dernierDit.current = '';
-    gameRef.current?.useSpace(id);
+    gameRef.current?.useSpace(id, sceneKindFor(avancement.mode));
     gameRef.current?.setWardrobe(tenue);
   };
 
@@ -278,13 +305,8 @@ export default function App() {
         voix={prefs.voix}
         bruitages={prefs.bruitages}
         onOpenSpaces={() => setMenuOpen(true)}
-        missionsOn={progress.actif}
-        onToggleMissions={() => {
-          const actif = !progress.actif;
-          avance(book.currentId, { ...progress, actif });
-          // Entrer en mission, c'est commencer la première : même règle.
-          if (actif) rangeLaTable();
-        }}
+        mode={mode}
+        onMode={changeMode}
         onWorkshop={() => setShopOpen(true)}
         onUndo={() => gameRef.current?.undo()}
         onClear={() => gameRef.current?.clearAll()}
@@ -317,7 +339,7 @@ export default function App() {
         />
       )}
 
-      {progress.actif && !affichee && (
+      {mode === 'missions' && !affichee && (
         <div className="mission-bar">
           <div className="mission-mots">
             <span className="mission-enonce">Toutes les missions sont faites !</span>

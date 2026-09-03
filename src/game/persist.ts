@@ -4,6 +4,7 @@ import type { Wardrobe } from '../core/wardrobe';
 const PREFS_KEY = 'blocks.prefs.v1';
 const SPACES_KEY = 'blocks.spaces.v1';
 const SCENE_PREFIX = 'blocks.scene.v2:';
+const BUILD_PREFIX = 'blocks.build.v1:';
 const LOOK_PREFIX = 'blocks.look.v1:';
 const PROGRESS_PREFIX = 'blocks.progress.v1:';
 /** Sauvegarde d'avant les espaces : elle devient la scène du premier espace. */
@@ -23,6 +24,24 @@ export interface SavedScene {
   /** Largeur de l'écran au moment de la sauvegarde, pour la remettre à l'échelle. */
   w: number;
   blocks: SavedBlock[];
+}
+
+/**
+ * Les trois modes s'excluent : on est en jeu libre, en missions, ou sur un
+ * chantier. Deux interrupteurs indépendants ne diraient jamais lequel est
+ * actif — c'est un choix à trois, pas deux bascules.
+ */
+export type Mode = 'libre' | 'missions' | 'construction';
+
+/**
+ * Un espace tient deux scènes qui ne se voient jamais : les nombres d'un côté,
+ * le chantier de l'autre. Changer de mode range l'une et sort l'autre, tout
+ * comme changer d'espace passe d'un rayon à l'autre.
+ */
+export type SceneKind = 'nombres' | 'chantier';
+
+export function sceneKindFor(mode: Mode): SceneKind {
+  return mode === 'construction' ? 'chantier' : 'nombres';
 }
 
 export interface Space {
@@ -120,16 +139,18 @@ export function saveSpaces(book: SpaceBook) {
 
 // --- scènes ---------------------------------------------------------------
 
-function sceneKey(id: string): string {
-  return SCENE_PREFIX + id;
+function sceneKey(id: string, kind: SceneKind): string {
+  return (kind === 'chantier' ? BUILD_PREFIX : SCENE_PREFIX) + id;
 }
 
-export function loadScene(spaceId: string): SavedScene | null {
+export function loadScene(spaceId: string, kind: SceneKind): SavedScene | null {
   // Le tout premier espace hérite de la scène d'avant : on ne fait pas
   // disparaître la construction en cours en livrant les espaces.
   const data =
-    read<SavedScene>(sceneKey(spaceId)) ??
-    (spaceId === DEFAULT_SPACE_ID ? read<SavedScene>(LEGACY_SCENE_KEY) : null);
+    read<SavedScene>(sceneKey(spaceId, kind)) ??
+    (kind === 'nombres' && spaceId === DEFAULT_SPACE_ID
+      ? read<SavedScene>(LEGACY_SCENE_KEY)
+      : null);
   if (!data || !Array.isArray(data.blocks) || !Number.isFinite(data.w)) return null;
   const blocks = data.blocks.filter(
     (b) => typeof b?.v === 'number' && Number.isFinite(b.x) && Number.isFinite(b.y),
@@ -137,12 +158,13 @@ export function loadScene(spaceId: string): SavedScene | null {
   return blocks.length ? { w: data.w, blocks } : null;
 }
 
-export function saveScene(spaceId: string, scene: SavedScene) {
-  write(sceneKey(spaceId), scene);
+export function saveScene(spaceId: string, kind: SceneKind, scene: SavedScene) {
+  write(sceneKey(spaceId, kind), scene);
 }
 
 export function dropScene(spaceId: string) {
-  drop(sceneKey(spaceId));
+  drop(sceneKey(spaceId, 'nombres'));
+  drop(sceneKey(spaceId, 'chantier'));
   drop(LOOK_PREFIX + spaceId);
   drop(PROGRESS_PREFIX + spaceId);
   if (spaceId === DEFAULT_SPACE_ID) drop(LEGACY_SCENE_KEY);
@@ -168,8 +190,8 @@ export interface Progress {
   pieces: string[];
   /** Missions mises de côté : elles repassent en fin de file. */
   passees: string[];
-  /** Le mode mission est allumé pour cet espace. */
-  actif: boolean;
+  /** Le mode dans lequel cet espace a été quitté. */
+  mode: Mode;
   /**
    * Mission choisie à la main sur la carte du parcours. Absente, c'est la
    * suite du parcours qui est jouée : refaire une mission est un détour, pas
@@ -178,19 +200,31 @@ export interface Progress {
   choisie?: string;
 }
 
-const AUCUNE_PROGRESSION: Progress = { faites: [], pieces: [], passees: [], actif: false };
+const AUCUNE_PROGRESSION: Progress = { faites: [], pieces: [], passees: [], mode: 'libre' };
+
+const MODES: Mode[] = ['libre', 'missions', 'construction'];
+
+/**
+ * `actif` est le réglage d'avant les trois modes : un booléen qui ne disait
+ * que « en mission ou non ». On le relit une dernière fois — quelqu'un qui a
+ * quitté en mission y revient — puis on ne le réécrit plus jamais.
+ */
+function readMode(data: Partial<Progress> & { actif?: boolean }): Mode {
+  if (MODES.includes(data.mode as Mode)) return data.mode as Mode;
+  return data.actif === true ? 'missions' : 'libre';
+}
 
 const listeDeTextes = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
 export function loadProgress(spaceId: string): Progress {
-  const data = read<Partial<Progress>>(PROGRESS_PREFIX + spaceId);
+  const data = read<Partial<Progress> & { actif?: boolean }>(PROGRESS_PREFIX + spaceId);
   if (!data) return AUCUNE_PROGRESSION;
   return {
     faites: listeDeTextes(data.faites),
     pieces: listeDeTextes(data.pieces),
     passees: listeDeTextes(data.passees),
-    actif: data.actif === true,
+    mode: readMode(data),
     choisie: typeof data.choisie === 'string' ? data.choisie : undefined,
   };
 }

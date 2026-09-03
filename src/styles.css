@@ -61,6 +61,53 @@ body,
   gap: 6px;
 }
 
+/* Jeu libre, missions, construction s'excluent : un sélecteur les montre tous
+   les trois d'un coup et dit lequel est actif. Deux boutons qui s'annulent
+   l'un l'autre sans le dire, c'est l'état que l'enfant n'arrive pas à lire. */
+.mode-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045));
+  border: 1px solid var(--panel-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.mode-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 11px;
+  background: none;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 120ms ease, transform 90ms ease;
+}
+
+.mode-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mode-btn:active {
+  transform: scale(0.94);
+}
+
+.mode-btn.on {
+  background: linear-gradient(180deg, #ffe4a0, #efb43c);
+  color: #3a2b06;
+}
+
 .space-btn {
   display: flex;
   align-items: center;
@@ -1085,19 +1132,39 @@ button:disabled {
     display: none;
   }
 
+  /* La pastille se passe aussi de son chevron : le menu s'ouvre tout aussi
+     bien en touchant la lettre, et le sélecteur de mode a pris la place que
+     ce chevron occupait. */
+  .space-btn .chevron {
+    display: none;
+  }
+
   .space-btn {
     padding: 5px;
   }
 
   .icon-btn.small {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border-radius: 11px;
   }
 
   .icon-btn.small svg {
     width: 19px;
     height: 19px;
+  }
+
+  /* Trois cases coûtent presque trois boutons : le sélecteur descend les mêmes
+     paliers que les outils, sinon la rangée déborde le téléphone. */
+  .mode-btn {
+    width: 27px;
+    height: 27px;
+    border-radius: 9px;
+  }
+
+  .mode-btn svg {
+    width: 17px;
+    height: 17px;
   }
 
   .topbar-tools {
@@ -1117,14 +1184,25 @@ button:disabled {
     height: 18px;
   }
 
-  .topbar-tools {
-    gap: 4px;
+  .mode-switch {
+    padding: 2px;
+    border-radius: 12px;
+    gap: 1px;
   }
 
-  /* Sur le plus etroit des telephones, la pastille se passe de son chevron :
-     le menu s'ouvre aussi bien en touchant la lettre. */
-  .space-btn .chevron {
-    display: none;
+  .mode-btn {
+    width: 25px;
+    height: 25px;
+    border-radius: 8px;
+  }
+
+  .mode-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .topbar-tools {
+    gap: 4px;
   }
 
   .space-btn {
@@ -1140,5 +1218,33 @@ button:disabled {
 
   .chip {
     height: 52px;
+  }
+
+  /* Dernier palier de la barre du haut : c'est en jeu libre qu'elle est la
+     plus chargée — l'atelier s'y ajoute, alors qu'un chantier s'en passe. */
+  .icon-btn.small {
+    width: 29px;
+    height: 29px;
+    border-radius: 9px;
+  }
+
+  .icon-btn.small svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .mode-btn {
+    width: 23px;
+    height: 23px;
+    border-radius: 7px;
+  }
+
+  .mode-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .topbar-tools {
+    gap: 3px;
   }
 }
