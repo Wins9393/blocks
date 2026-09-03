@@ -58,6 +58,79 @@ function pickFace(cells: Cell[], w: number): number {
   return cells.indexOf(best);
 }
 
+/** Signature d'un jeu de cases : de quoi servir de clé de cache. */
+export function signature(cells: Cell[]): string {
+  return cells.map((c) => `${c.x},${c.y}`).join(';');
+}
+
+/**
+ * Forme quelconque, à partir de ses seules cases.
+ *
+ * Un assemblage de construction n'a pas de valeur qui le désigne : il *est*
+ * ses cases, et rien ne dit qu'elles forment un rectangle. L'ordre d'entrée
+ * est conservé tel quel — c'est lui qui relie chaque case à sa matière.
+ */
+export function shapeOf(cells: Cell[]): Shape {
+  let minX = Infinity;
+  let minY = Infinity;
+  for (const c of cells) {
+    if (c.x < minX) minX = c.x;
+    if (c.y < minY) minY = c.y;
+  }
+  const moved = cells.map((c) => ({ x: c.x - minX, y: c.y - minY }));
+  let w = 0;
+  let h = 0;
+  for (const c of moved) {
+    if (c.x + 1 > w) w = c.x + 1;
+    if (c.y + 1 > h) h = c.y + 1;
+  }
+  return { w, h, cells: moved, faceIndex: pickFace(moved, w) };
+}
+
+const VOISINS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+/**
+ * Groupes de cases qui se tiennent **par une arête**. Le coin ne relie pas :
+ * un escalier tenu par les angles n'a l'air solide dans aucun monde, et
+ * surtout, avec deux définitions de connexité en lice, couper une diagonale
+ * rendrait un résultat que personne ne saurait prédire.
+ *
+ * Rend des indices plutôt que des cases, pour que la matière de chaque cube
+ * suive la sienne.
+ */
+export function connectedParts(cells: Cell[]): number[][] {
+  const at = new Map<string, number>();
+  cells.forEach((c, i) => at.set(`${c.x},${c.y}`, i));
+
+  const vus = new Array<boolean>(cells.length).fill(false);
+  const parts: number[][] = [];
+  for (let i = 0; i < cells.length; i++) {
+    if (vus[i]) continue;
+    const part: number[] = [];
+    const pile = [i];
+    vus[i] = true;
+    while (pile.length) {
+      const j = pile.pop() as number;
+      part.push(j);
+      const { x, y } = cells[j];
+      for (const [dx, dy] of VOISINS) {
+        const k = at.get(`${x + dx},${y + dy}`);
+        if (k !== undefined && !vus[k]) {
+          vus[k] = true;
+          pile.push(k);
+        }
+      }
+    }
+    parts.push(part.sort((a, b) => a - b));
+  }
+  return parts;
+}
+
 const cache = new Map<number, Shape>();
 
 export function shapeFor(value: number): Shape {
@@ -96,6 +169,14 @@ export function shapeFor(value: number): Shape {
   return shape;
 }
 
+/** Décalage de chaque case par rapport au centre de masse, en cubes. */
+export function centeredOf(shape: Shape): Cell[] {
+  const offsets = shape.cells.map((c) => cellOffset(shape, c));
+  const cx = offsets.reduce((s, o) => s + o.x, 0) / offsets.length;
+  const cy = offsets.reduce((s, o) => s + o.y, 0) / offsets.length;
+  return offsets.map((o) => ({ x: o.x - cx, y: o.y - cy }));
+}
+
 /** Décalage d'une cellule par rapport au centre de la boîte englobante, en cubes. */
 export function cellOffset(shape: Shape, cell: Cell): Cell {
   return {
@@ -115,11 +196,7 @@ export function centeredCells(value: number): Cell[] {
   const hit = centeredCache.get(n);
   if (hit) return hit;
 
-  const shape = shapeFor(n);
-  const offsets = shape.cells.map((c) => cellOffset(shape, c));
-  const cx = offsets.reduce((s, o) => s + o.x, 0) / offsets.length;
-  const cy = offsets.reduce((s, o) => s + o.y, 0) / offsets.length;
-  const centered = offsets.map((o) => ({ x: o.x - cx, y: o.y - cy }));
+  const centered = centeredOf(shapeFor(n));
   centeredCache.set(n, centered);
   return centered;
 }
@@ -193,19 +270,21 @@ function tile(shape: Shape, colonneDabord: boolean): Rect[] {
   return rects;
 }
 
-export function rectanglesFor(value: number): Rect[] {
-  const n = Math.max(1, Math.floor(value));
-  const hit = rectCache.get(n);
-  if (hit) return hit;
-
-  const shape = shapeFor(n);
+export function rectanglesOf(shape: Shape): Rect[] {
   // Les deux sens ne donnent pas le même découpage : en ligne d'abord, une base
   // large surmontée d'une bosse part en tranches verticales. On garde le plus
   // économe — moins il y a de pièces, plus le contact avec le sol est propre.
   const lignes = tile(shape, false);
   const colonnes = tile(shape, true);
-  const rects = colonnes.length < lignes.length ? colonnes : lignes;
+  return colonnes.length < lignes.length ? colonnes : lignes;
+}
 
+export function rectanglesFor(value: number): Rect[] {
+  const n = Math.max(1, Math.floor(value));
+  const hit = rectCache.get(n);
+  if (hit) return hit;
+
+  const rects = rectanglesOf(shapeFor(n));
   rectCache.set(n, rects);
   return rects;
 }

@@ -16,7 +16,11 @@ import {
   UNIT,
 } from '../core/constants';
 import { colorFor } from '../core/palette';
-import { centeredCells, shapeFor } from '../core/shape';
+import { centeredOf, connectedParts, shapeFor, shapeOf } from '../core/shape';
+import type { Cell } from '../core/shape';
+import { rotateCell, weld } from '../core/build';
+import { CHENE, matiereFor, newSkin } from '../core/matieres';
+import type { Skin } from '../core/matieres';
 import * as sfx from '../audio/sfx';
 import { ShakeDetector, partitionByCut, segmentHitsBox, sliceFromPath } from '../input/gestures';
 import type { Cut, Sample } from '../input/gestures';
@@ -25,8 +29,11 @@ import type { Block } from '../physics/world';
 import type { Wardrobe } from '../core/wardrobe';
 import { Renderer } from '../render/renderer';
 import type { BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
-import { loadScene, saveScene } from './persist';
-import type { SavedBlock, SceneKind } from './persist';
+import { loadBuild, loadScene, saveBuild, saveScene } from './persist';
+import type { SavedBlock, SavedPiece, SceneKind } from './persist';
+
+/** Ce qu'une annulation remet en place : des nombres, ou un chantier. */
+type Snapshot = SavedBlock[] | SavedPiece[];
 
 const { Body, Events, Sleeping, Vector } = Matter;
 
@@ -73,7 +80,7 @@ export class Game {
   private drags = new Map<number, Drag>();
   private slices = new Map<number, Slice>();
   private particles: Particle[] = [];
-  private undoStack: SavedBlock[][] = [];
+  private undoStack: Snapshot[] = [];
   private trashGulp = 0;
   /** 0..1 : la corbeille n'existe à l'écran que pendant un glisser. */
   private trashShow = 0;
@@ -94,6 +101,16 @@ export class Game {
     private kind: SceneKind = 'nombres',
   ) {
     this.renderer = new Renderer(canvas);
+  }
+
+  /** Sur un chantier, on ne compte plus : ni valeur, ni visage, ni voix. */
+  private get chantier(): boolean {
+    return this.kind === 'chantier';
+  }
+
+  /** La couleur d'un bloc : sa matière sur un chantier, son nombre sinon. */
+  private couleur(block: Block): string {
+    return block.skin.length ? matiereFor(block.skin[0].mat).couleur : colorFor(block.value);
   }
 
   // --- cycle de vie -----------------------------------------------------
@@ -207,7 +224,7 @@ export class Game {
     // Un grand bloc lâché trop haut naît la tête hors de l'écran : on descend
     // le point de chute d'autant que le bloc est haut.
     const y = 40 + (shapeFor(v).h * UNIT) / 2;
-    const block = this.world.add(v, x, y, (Math.random() - 0.5) * 0.6);
+    const block = this.world.add(shapeFor(v), x, y, (Math.random() - 0.5) * 0.6);
     Body.setVelocity(block.body, { x: (Math.random() - 0.5) * 3, y: 2 });
     this.track(block);
     sfx.playSpawn(v);
@@ -215,10 +232,34 @@ export class Game {
     this.emit();
   }
 
+  /** Pose un cube de la matière demandée. Sur un chantier, tout part de là. */
+  poseCube(mat: number = CHENE) {
+    if (this.world.totalUnits + 1 > MAX_UNITS) {
+      sfx.playRefuse();
+      return;
+    }
+    this.snapshot();
+    const x = this.world.width * 0.5 + (Math.random() - 0.5) * Math.min(220, this.world.width * 0.5);
+    const block = this.world.add(
+      shapeFor(1),
+      x,
+      40 + UNIT / 2,
+      (Math.random() - 0.5) * 0.6,
+      { x: (Math.random() - 0.5) * 3, y: 2 },
+      undefined,
+      [newSkin(mat)],
+    );
+    this.track(block);
+    sfx.playSpawn(1);
+    this.dirty = true;
+    this.emit();
+  }
+
   undo() {
     const snap = this.undoStack.pop();
     if (!snap) return;
-    this.load(snap);
+    if (this.chantier) this.loadBuild(snap as SavedPiece[]);
+    else this.load(snap as SavedBlock[]);
     sfx.playPeel();
     this.dirty = true;
     this.emit();
@@ -282,7 +323,7 @@ export class Game {
     const ratio = savedWidth > 0 ? this.world.width / savedWidth : 1;
     for (const s of saved) {
       const block = this.world.add(
-        Math.min(MAX_VALUE, Math.max(1, Math.round(s.v))),
+        shapeFor(Math.min(MAX_VALUE, Math.max(1, Math.round(s.v)))),
         clamp(s.x * ratio, UNIT, this.world.width - UNIT),
         Math.min(s.y, this.world.groundY),
         s.a,
@@ -291,10 +332,54 @@ export class Game {
     }
   }
 
+  private serializeBuild(): SavedPiece[] {
+    return [...this.world.blocks.values()].map((b) => ({
+      cells: b.shape.cells.map((c, i) => ({
+        x: c.x,
+        y: c.y,
+        m: b.skin[i]?.mat ?? CHENE,
+        g: b.skin[i]?.seed ?? 0,
+      })),
+      x: Math.round(b.body.position.x),
+      y: Math.round(b.body.position.y),
+      a: Number(Math.atan2(Math.sin(b.body.angle), Math.cos(b.body.angle)).toFixed(3)),
+    }));
+  }
+
+  private loadBuild(saved: SavedPiece[], savedWidth: number = this.world.width) {
+    this.world.clear();
+    this.visuals.clear();
+    this.drags.clear();
+    this.slices.clear();
+    const ratio = savedWidth > 0 ? this.world.width / savedWidth : 1;
+    for (const piece of saved) {
+      // Une pièce enregistrée avant un ajout de matières peut porter un
+      // identifiant qu'on ne connaît plus : `matiereFor` la ramène sur la
+      // première plutôt que de rendre un cube sans couleur.
+      const shape = shapeOf(piece.cells);
+      const skin: Skin[] = piece.cells.map((c) => ({ mat: c.m, seed: c.g }));
+      const block = this.world.add(
+        shape,
+        clamp(piece.x * ratio, UNIT, this.world.width - UNIT),
+        Math.min(piece.y, this.world.groundY),
+        piece.a,
+        undefined,
+        undefined,
+        skin,
+      );
+      this.track(block, 0);
+    }
+  }
+
   private restore() {
-    const saved = loadScene(this.spaceId, this.kind);
     // Même vide : charger, c'est aussi vider la scène précédente.
-    this.load(saved?.blocks ?? [], saved?.w);
+    if (this.chantier) {
+      const saved = loadBuild(this.spaceId);
+      this.loadBuild(saved?.blocks ?? [], saved?.w);
+    } else {
+      const saved = loadScene(this.spaceId);
+      this.load(saved?.blocks ?? [], saved?.w);
+    }
     this.emit();
   }
 
@@ -346,12 +431,13 @@ export class Game {
   }
 
   private snapshot() {
-    this.undoStack.push(this.serialize());
+    this.undoStack.push(this.chantier ? this.serializeBuild() : this.serialize());
     if (this.undoStack.length > UNDO_DEPTH) this.undoStack.shift();
   }
 
   private flush = () => {
-    saveScene(this.spaceId, this.kind, { w: this.world.width, blocks: this.serialize() });
+    if (this.chantier) saveBuild(this.spaceId, { w: this.world.width, blocks: this.serializeBuild() });
+    else saveScene(this.spaceId, { w: this.world.width, blocks: this.serialize() });
     this.dirty = false;
   };
 
@@ -523,7 +609,8 @@ export class Game {
         ? this.world.blocks.get(drag.candidate)
         : null;
     if (candidate) {
-      if (this.canMerge(block.value + candidate.value)) this.merge(block, candidate);
+      if (this.chantier) this.weldBlocks(block, candidate);
+      else if (this.canMerge(block.value + candidate.value)) this.merge(block, candidate);
       else sfx.playRefuse();
     }
     this.dirty = true;
@@ -532,7 +619,105 @@ export class Game {
 
   /** La fusion s'arrête au plafond, et avant si le bloc ne tient pas à l'écran. */
   private canMerge(sum: number): boolean {
-    return sum <= MAX_VALUE && this.world.fits(sum);
+    return sum <= MAX_VALUE && this.world.fits(shapeFor(sum));
+  }
+
+  /**
+   * Soude le bloc tiré sur le bloc cible, là où le doigt l'a amené.
+   *
+   * Tout se joue dans la grille de la cible : on y exprime la pose du bloc
+   * tiré, on arrondit au cube près et au quart de tour, et `weld` cherche la
+   * place la plus proche qui tienne. L'assemblage garde l'inclinaison de la
+   * cible, et **la cible ne bouge pas d'un pixel** — c'est autour d'elle qu'on
+   * construit, et voir sa maison se recentrer à chaque brique serait
+   * insupportable.
+   */
+  private weldBlocks(tire: Block, cible: Block) {
+    const cCentered = centeredOf(cible.shape);
+    const tCentered = centeredOf(tire.shape);
+    const quart = Math.round((tire.body.angle - cible.body.angle) / (Math.PI / 2));
+
+    // Centre de masse du bloc tiré, ramené dans le repère de la cible, en cubes.
+    const cos = Math.cos(cible.body.angle);
+    const sin = Math.sin(cible.body.angle);
+    const dx = (tire.body.position.x - cible.body.position.x) / UNIT;
+    const dy = (tire.body.position.y - cible.body.position.y) / UNIT;
+    const px = dx * cos + dy * sin;
+    const py = -dx * sin + dy * cos;
+
+    // Où tombe sa première case, en coordonnées entières de la cible.
+    const t = rotateCell(tCentered[0], quart);
+    const ancre = {
+      x: Math.round(px + t.x - cCentered[0].x + cible.shape.cells[0].x),
+      y: Math.round(py + t.y - cCentered[0].y + cible.shape.cells[0].y),
+    };
+
+    const pose = weld(cible.shape.cells, tire.shape.cells, quart, ancre);
+    if (!pose) {
+      sfx.playRefuse();
+      return;
+    }
+
+    const shape = shapeOf([...cible.shape.cells, ...pose]);
+    if (!this.world.fits(shape)) {
+      sfx.playRefuse();
+      return;
+    }
+
+    // La cible garde sa place : on décale le corps de ce que le nouveau centre
+    // de masse a bougé, pour que sa première case retombe exactement dessus.
+    const centered = centeredOf(shape);
+    const ox = (cCentered[0].x - centered[0].x) * UNIT;
+    const oy = (cCentered[0].y - centered[0].y) * UNIT;
+
+    this.snapshot();
+    const skin = [...cible.skin, ...tire.skin];
+    const velocity = { x: cible.body.velocity.x, y: cible.body.velocity.y };
+    const angle = cible.body.angle;
+    const x = cible.body.position.x + ox * cos - oy * sin;
+    const y = cible.body.position.y + ox * sin + oy * cos;
+
+    this.world.remove(tire.id);
+    this.world.remove(cible.id);
+    this.visuals.delete(tire.id);
+    this.visuals.delete(cible.id);
+
+    const merged = this.world.add(shape, x, y, angle, velocity, undefined, skin);
+    this.track(merged);
+    sfx.playMerge(Math.min(MAX_VALUE, merged.value));
+    this.dirty = true;
+    this.emit();
+  }
+
+  /**
+   * Repose un morceau là où ses cubes se trouvent déjà : la position du corps
+   * se calcule pour que sa première case retombe exactement sur la sienne.
+   * Sans ça, couper ou détacher ferait sauter ce qui reste.
+   */
+  private placePiece(
+    cells: Cell[],
+    skin: Skin[],
+    at: Array<{ x: number; y: number }>,
+    angle: number,
+    velocity: { x: number; y: number },
+  ): Block {
+    const shape = shapeOf(cells);
+    const centered = centeredOf(shape);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const ox = centered[0].x * UNIT;
+    const oy = centered[0].y * UNIT;
+    const piece = this.world.add(
+      shape,
+      clamp(at[0].x - (ox * cos - oy * sin), UNIT, this.world.width - UNIT),
+      at[0].y - (ox * sin + oy * cos),
+      angle,
+      velocity,
+      undefined,
+      skin,
+    );
+    this.track(piece);
+    return piece;
   }
 
   private merge(a: Block, b: Block) {
@@ -549,7 +734,7 @@ export class Game {
     this.visuals.delete(a.id);
     this.visuals.delete(b.id);
 
-    const merged = this.world.add(value, clamp(x, UNIT, this.world.width - UNIT), y, 0, {
+    const merged = this.world.add(shapeFor(value), clamp(x, UNIT, this.world.width - UNIT), y, 0, {
       x: vx * 0.4,
       y: vy * 0.4,
     });
@@ -560,8 +745,78 @@ export class Game {
     this.emit();
   }
 
+  /**
+   * Une secousse détache le cube que le doigt tient.
+   *
+   * C'est le geste qui répare l'erreur ancienne : l'annulation ne défait que le
+   * dernier geste, et une brique mal posée se voit trois briques plus tard.
+   * Sans lui, il faudrait couper la maison en deux pour la corriger.
+   */
+  private detach(drag: Drag) {
+    const block = this.world.blocks.get(drag.blockId);
+    if (!block) return;
+    if (block.value <= 1) {
+      this.visual(block.id).shake = 1;
+      return;
+    }
+
+    const positions = cubePositions(block);
+    let pick = 0;
+    let best = Infinity;
+    positions.forEach((p, i) => {
+      const d = (p.x - drag.px) ** 2 + (p.y - drag.py) ** 2;
+      if (d < best) {
+        best = d;
+        pick = i;
+      }
+    });
+
+    this.snapshot();
+    const angle = block.body.angle;
+    const velocity = { x: block.body.velocity.x, y: block.body.velocity.y };
+    const side = drag.dirX >= 0 ? -1 : 1;
+    const partie = positions[pick];
+    const restCells = block.shape.cells.filter((_, i) => i !== pick);
+    const restSkin = block.skin.filter((_, i) => i !== pick);
+    const restAt = positions.filter((_, i) => i !== pick);
+
+    this.world.remove(block.id);
+    this.visuals.delete(block.id);
+
+    // Retirer un cube peut couper l'assemblage : ôter le milieu d'un pont en
+    // laisse deux. Ce qui reste se recompose en autant de morceaux qu'il y a de
+    // groupes qui se tiennent par une arête.
+    for (const part of connectedParts(restCells)) {
+      const piece = this.placePiece(
+        part.map((i) => restCells[i]),
+        part.map((i) => restSkin[i]),
+        part.map((i) => restAt[i]),
+        angle,
+        velocity,
+      );
+      this.visual(piece.id).shake = 1;
+    }
+
+    const unit = this.world.add(
+      shapeFor(1),
+      partie.x + side * UNIT * 0.6,
+      partie.y - UNIT * 0.4,
+      angle,
+      { x: velocity.x + side * 7, y: velocity.y - 6 },
+      undefined,
+      [block.skin[pick] ?? newSkin()],
+    );
+    Body.setAngularVelocity(unit.body, side * 0.25);
+    this.track(unit);
+    this.burst(unit, 4);
+    sfx.playPeel();
+    this.dirty = true;
+    this.emit();
+  }
+
   /** Une secousse détache une unité du bloc tenu. */
   private peel(drag: Drag) {
+    if (this.chantier) return this.detach(drag);
     const block = this.world.blocks.get(drag.blockId);
     if (!block) return;
     if (block.value <= 1) {
@@ -573,11 +828,11 @@ export class Game {
     const { x, y } = block.body.position;
     const halfW = (block.body.bounds.max.x - block.body.bounds.min.x) / 2;
     const side = drag.dirX >= 0 ? -1 : 1; // l'unité part à l'opposé du mouvement
-    const reduced = this.world.reshape(block.id, block.value - 1);
+    const reduced = this.world.reshape(block.id, shapeFor(block.value - 1));
     if (!reduced) return;
     this.visual(reduced.id).shake = 1;
 
-    const unit = this.world.add(1, x + side * (halfW + UNIT * 1.1), y - UNIT * 0.4, 0, {
+    const unit = this.world.add(shapeFor(1), x + side * (halfW + UNIT * 1.1), y - UNIT * 0.4, 0, {
       x: side * 7 + drag.dirX * 0.2,
       y: -6,
     });
@@ -614,7 +869,9 @@ export class Game {
     for (const block of victims) {
       // On répartit les cubes, pas les parties du corps : depuis que la forme
       // de collision est pavée de rectangles, une partie vaut plusieurs cubes.
-      const [plus, minus] = partitionByCut(cut, cubePositions(block));
+      // L'indice voyage avec le point, pour que la matière suive sa case.
+      const marques = cubePositions(block).map((p, i) => ({ ...p, i }));
+      const [plus, minus] = partitionByCut(cut, marques);
       if (plus.length === 0 || minus.length === 0) continue;
 
       if (!cutSomething) {
@@ -629,18 +886,44 @@ export class Game {
       const angle = block.body.angle;
       const velocity = block.body.velocity;
 
-      const halves: Array<[{ x: number; y: number }[], number]> = [
+      const halves: Array<[typeof plus, number]> = [
         [plus, 1],
         [minus, -1],
       ];
       this.world.remove(block.id);
       this.visuals.delete(block.id);
 
+      if (this.chantier) {
+        for (const [group, sign] of halves) {
+          const cells = group.map((g) => block.shape.cells[g.i]);
+          const at = group.map((g) => ({
+            x: g.x + normal.x * sign * UNIT * 0.6,
+            y: g.y + normal.y * sign * UNIT * 0.6,
+          }));
+          // Un trait droit ne rend pas deux morceaux mais autant qu'il en
+          // détache : un U tranché en travers de ses branches en donne trois.
+          for (const part of connectedParts(cells)) {
+            this.placePiece(
+              part.map((k) => cells[k]),
+              part.map((k) => block.skin[group[k].i]),
+              part.map((k) => at[k]),
+              angle,
+              {
+                x: velocity.x + normal.x * sign * 4.5,
+                y: velocity.y + normal.y * sign * 4.5 - 1,
+              },
+            );
+          }
+        }
+        this.sparkleLine(cut);
+        continue;
+      }
+
       for (const [group, sign] of halves) {
         const cx = group.reduce((s, p) => s + p.x, 0) / group.length;
         const cy = group.reduce((s, p) => s + p.y, 0) / group.length;
         const piece = this.world.add(
-          group.length,
+          shapeFor(group.length),
           clamp(cx + normal.x * sign * UNIT * 0.6, UNIT, this.world.width - UNIT),
           cy + normal.y * sign * UNIT * 0.6,
           angle,
@@ -665,7 +948,7 @@ export class Game {
   // --- particules -------------------------------------------------------
 
   private burst(block: Block, perCube: number, target?: { x: number; y: number }) {
-    const color = colorFor(block.value);
+    const color = this.couleur(block);
     for (const { x, y } of cubePositions(block)) {
       for (let i = 0; i < perCube; i++) {
         this.particles.push({
@@ -849,6 +1132,8 @@ export class Game {
       blocks.push({
         id: block.id,
         value: block.value,
+        shape: block.shape,
+        skin: block.skin,
         body: block.body,
         pop: v.pop,
         squash: v.squash,
@@ -910,7 +1195,7 @@ export class Game {
 function cubePositions(block: Block): Array<{ x: number; y: number }> {
   const cos = Math.cos(block.body.angle);
   const sin = Math.sin(block.body.angle);
-  return centeredCells(block.value).map((cell) => {
+  return centeredOf(block.shape).map((cell) => {
     const ox = cell.x * UNIT;
     const oy = cell.y * UNIT;
     return {

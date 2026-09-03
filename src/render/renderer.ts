@@ -1,6 +1,9 @@
 import type Matter from 'matter-js';
 import { GROUND_HEIGHT, UNIT } from '../core/constants';
 import { colorFor, parseHex, rgba, shade } from '../core/palette';
+import { shapeFor } from '../core/shape';
+import type { Shape } from '../core/shape';
+import type { Skin } from '../core/matieres';
 import type { Sample } from '../input/gestures';
 import type { Wardrobe } from '../core/wardrobe';
 import { DecorCache, drawCharacter } from './faces';
@@ -16,6 +19,9 @@ const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -appl
 export interface BlockVisual {
   id: number;
   value: number;
+  shape: Shape;
+  /** Matière de chaque cube, sur un chantier. Vide au mode nombre. */
+  skin: Skin[];
   body: Matter.Body;
   /** 0..1, animation d'apparition. */
   pop: number;
@@ -308,7 +314,7 @@ export class Renderer {
     const scale = 0.62 + 0.38 * easeOutBack(1 - b.pop);
     const sq = b.squash;
     const jitter = b.shake * 4;
-    const art = blockArt(b.value);
+    const art = blockArt(b.shape);
 
     // Au-dessus de la corbeille, le bloc rétrécit juste ce qu'il faut pour y
     // tenir et se recentre dedans : sans ça, un 10 dépasse du seau des deux
@@ -386,6 +392,8 @@ export class Renderer {
       if (p.sx <= 0.01) return;
       blocs.push({
         value: b.value,
+        shape: b.shape,
+        skin: b.skin,
         x: p.px,
         y: p.py,
         angle: p.angle,
@@ -412,11 +420,15 @@ export class Renderer {
       // Pas de rainures dessinées ici : en volume, ce sont les creux entre
       // cubes voisins qui les font, et un trait par-dessus les doublerait.
       this.drawShine(p.art, b.pop);
-      drawCharacter(ctx, b.value, colorFor(b.value), {
-        pose: this.pose(b, scene),
-        decor: this.faces,
-        wardrobe: this.wardrobe,
-      });
+      // Pas de visage sur un chantier : c'est la matière qui dit ce qu'on
+      // regarde, et un personnage y ferait revenir le nombre par la fenêtre.
+      if (!b.skin.length) {
+        drawCharacter(ctx, b.value, colorFor(b.value), {
+          pose: this.pose(b, scene),
+          decor: this.faces,
+          wardrobe: this.wardrobe,
+        });
+      }
       ctx.restore();
     });
 
@@ -470,6 +482,8 @@ export class Renderer {
     // Un bloc qui descend dans la corbeille emmène sa pastille ailleurs — elle
     // remontait se coincer dans la barre du haut. Elle s'efface avec lui.
     if (b.sink > 0.98) return;
+    // Et sur un chantier, il n'y a pas de nombre à annoncer.
+    if (b.skin.length) return;
     const { ctx } = this;
     const base = colorFor(b.value);
     const label = String(b.value);
@@ -524,7 +538,7 @@ export class Renderer {
     const { ctx } = this;
     const sum = ghost.a + ghost.b;
     const color = ghost.ok ? colorFor(sum) : '#ff6b6b';
-    const art = blockArt(ghost.ok ? sum : 1);
+    const art = blockArt(shapeFor(ghost.ok ? sum : 1));
     const pen = 2 * CORNER;
 
     ctx.save();

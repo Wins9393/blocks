@@ -7,15 +7,23 @@ import {
   TRASH_W,
   UNIT,
 } from '../core/constants';
-import { rectanglesFor, shapeFor } from '../core/shape';
+import { rectanglesOf } from '../core/shape';
 import type { Shape } from '../core/shape';
+import type { Skin } from '../core/matieres';
 
 const { Bodies, Body, Composite, Engine, Query, Sleeping } = Matter;
 
 export interface Block {
   id: number;
+  /** Nombre de cubes. Au mode nombre c'est la valeur du bloc ; sur un chantier
+   *  ce n'est plus qu'un compte, et rien ne le désigne. */
   value: number;
   shape: Shape;
+  /**
+   * Matière et grain de chaque cube, dans l'ordre de `shape.cells`. Vide au
+   * mode nombre, où la couleur vient de la valeur.
+   */
+  skin: Skin[];
   body: Matter.Body;
 }
 
@@ -31,9 +39,9 @@ let nextId = 1;
  * soudure : elles sont molles et coûteuses, un corps composé est indéformable
  * et gratuit. Fusionner et séparer reviennent alors à détruire puis recréer.
  */
-function buildBody(value: number, x: number, y: number, angle: number): Matter.Body {
+function buildBody(shape: Shape, x: number, y: number, angle: number): Matter.Body {
   const material = { friction: 0.42, frictionStatic: 0.7, restitution: 0.05 };
-  const parts = rectanglesFor(value).map((r) =>
+  const parts = rectanglesOf(shape).map((r) =>
     Bodies.rectangle(x + r.x * UNIT, y + r.y * UNIT, r.w * UNIT, r.h * UNIT, material),
   );
   const body = Body.create({ ...material, parts, frictionAir: 0.014, slop: 0.04 });
@@ -77,8 +85,8 @@ export class World {
    * le solveur l'éjecterait. Sur un petit écran, la fusion s'arrête donc avant
    * la valeur maximale.
    */
-  fits(value: number): boolean {
-    return shapeFor(value).w * UNIT + 4 <= this.width;
+  fits(shape: Shape): boolean {
+    return shape.w * UNIT + 4 <= this.width;
   }
 
   resize(width: number, height: number, bottomInset: number) {
@@ -104,10 +112,18 @@ export class World {
     this.trash = { x: Math.round(width / 2), y: this.groundY + 24, w: tw, h: 44 };
   }
 
-  add(value: number, x: number, y: number, angle = 0, velocity?: Matter.Vector, id?: number): Block {
-    const body = buildBody(value, x, y, angle);
+  add(
+    shape: Shape,
+    x: number,
+    y: number,
+    angle = 0,
+    velocity?: Matter.Vector,
+    id?: number,
+    skin: Skin[] = [],
+  ): Block {
+    const body = buildBody(shape, x, y, angle);
     if (velocity) Body.setVelocity(body, velocity);
-    const block: Block = { id: id ?? nextId++, value, shape: shapeFor(value), body };
+    const block: Block = { id: id ?? nextId++, value: shape.cells.length, shape, skin, body };
     (body as Matter.Body & { blockId: number }).blockId = block.id;
     this.blocks.set(block.id, block);
     Composite.add(this.engine.world, body);
@@ -121,8 +137,8 @@ export class World {
     this.blocks.delete(id);
   }
 
-  /** Change la valeur d'un bloc en place : même identité, même pose, nouvelle forme. */
-  reshape(id: number, value: number): Block | null {
+  /** Change la forme d'un bloc en place : même identité, même pose. */
+  reshape(id: number, shape: Shape, skin: Skin[] = []): Block | null {
     const old = this.blocks.get(id);
     if (!old) return null;
     const { x, y } = old.body.position;
@@ -130,7 +146,7 @@ export class World {
     const velocity = { x: old.body.velocity.x, y: old.body.velocity.y };
     const angularVelocity = old.body.angularVelocity;
     this.remove(id);
-    const next = this.add(value, x, y, angle, velocity, id);
+    const next = this.add(shape, x, y, angle, velocity, id, skin);
     Body.setAngularVelocity(next.body, angularVelocity);
     return next;
   }

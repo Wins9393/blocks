@@ -4,16 +4,18 @@ import {
   NAME_MAX,
   cleanName,
   dropScene,
+  loadBuild,
   loadPrefs,
   loadProgress,
   loadScene,
   makeSpace,
   newSpaceId,
+  saveBuild,
   saveProgress,
   saveScene,
   sceneKindFor,
 } from './persist';
-import type { SavedScene } from './persist';
+import type { SavedBuild, SavedScene } from './persist';
 
 /** Une mémoire de navigateur, rendue pour qu'un test y sème ce qu'il veut. */
 function stock(entrees: Record<string, unknown> = {}): Map<string, string> {
@@ -32,6 +34,19 @@ function memoire(valeur: unknown) {
 }
 
 const scene = (v: number): SavedScene => ({ w: 400, blocks: [{ v, x: 10, y: 20, a: 0 }] });
+
+/** Un chantier d'une pièce, faite de `n` cubes en ligne. */
+const chantier = (n: number, m = 0): SavedBuild => ({
+  w: 400,
+  blocks: [
+    {
+      x: 10,
+      y: 20,
+      a: 0,
+      cells: Array.from({ length: n }, (_, i) => ({ x: i, y: 0, m, g: i })),
+    },
+  ],
+});
 
 describe('cleanName', () => {
   it('rogne les espaces et écrase les doublons', () => {
@@ -102,19 +117,19 @@ describe('sceneKindFor', () => {
 describe('les deux scènes d’un espace', () => {
   it('ne se mélangent jamais', () => {
     stock();
-    saveScene('leo', 'nombres', scene(7));
-    saveScene('leo', 'chantier', scene(1));
-    expect(loadScene('leo', 'nombres')?.blocks[0].v).toBe(7);
-    expect(loadScene('leo', 'chantier')?.blocks[0].v).toBe(1);
+    saveScene('leo', scene(7));
+    saveBuild('leo', chantier(3));
+    expect(loadScene('leo')?.blocks[0].v).toBe(7);
+    expect(loadBuild('leo')?.blocks[0].cells).toHaveLength(3);
   });
 
   it("partent ensemble quand l'espace est supprimé", () => {
     stock();
-    saveScene('leo', 'nombres', scene(7));
-    saveScene('leo', 'chantier', scene(1));
+    saveScene('leo', scene(7));
+    saveBuild('leo', chantier(3));
     dropScene('leo');
-    expect(loadScene('leo', 'nombres')).toBeNull();
-    expect(loadScene('leo', 'chantier')).toBeNull();
+    expect(loadScene('leo')).toBeNull();
+    expect(loadBuild('leo')).toBeNull();
   });
 
   it("n'ouvrent pas un chantier sur la scène d'avant les espaces", () => {
@@ -122,8 +137,34 @@ describe('les deux scènes d’un espace', () => {
     // La retrouver sur un chantier y ferait apparaître des blocs que personne
     // n'y a posés.
     stock({ 'blocks.scene.v1': scene(5) });
-    expect(loadScene(DEFAULT_SPACE_ID, 'nombres')?.blocks[0].v).toBe(5);
-    expect(loadScene(DEFAULT_SPACE_ID, 'chantier')).toBeNull();
+    expect(loadScene(DEFAULT_SPACE_ID)?.blocks[0].v).toBe(5);
+    expect(loadBuild(DEFAULT_SPACE_ID)).toBeNull();
+  });
+});
+
+describe('la sauvegarde d’un chantier', () => {
+  it('rend exactement ce qu’on lui a confié', () => {
+    stock();
+    saveBuild('leo', chantier(4, 0));
+    const relu = loadBuild('leo');
+    expect(relu).toEqual(chantier(4, 0));
+  });
+
+  it('jette la pièce abîmée, jamais la maison', () => {
+    // Une pièce sans case n'a pas de forme, un cube sans coordonnées n'a pas de
+    // place : ils partent, le reste du chantier revient.
+    stock({
+      'blocks.build.v1:leo': {
+        w: 400,
+        blocks: [
+          { x: 1, y: 2, a: 0, cells: [] },
+          { x: 3, y: 4, a: 0, cells: [{ x: 0, y: 0, m: 0, g: 7 }, { y: 1, m: 0, g: 8 }] },
+        ],
+      },
+    });
+    const relu = loadBuild('leo');
+    expect(relu?.blocks).toHaveLength(1);
+    expect(relu?.blocks[0].cells).toEqual([{ x: 0, y: 0, m: 0, g: 7 }]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_VALUE, UNIT } from '../core/constants';
-import { centeredCells } from '../core/shape';
+import { centeredCells, shapeFor } from '../core/shape';
 import { SLOTS, slotFor } from '../core/wardrobe';
 import { Forge } from './mesh';
 import type { Maille } from './mesh';
@@ -114,9 +114,19 @@ describe('les objets en volume', () => {
   });
 });
 
+/** La maille d'un bloc de nombre : une seule teinte, un seul modèle. */
+function maille(v: number) {
+  const shape = shapeFor(v);
+  return mailleBloc(
+    shape,
+    shape.cells.map(() => [0.5, 0.5, 0.5] as [number, number, number]),
+    shape.cells.map(() => 0),
+  );
+}
+
 describe('les blocs en volume', () => {
   it('tient debout pour toutes les valeurs', () => {
-    for (let v = 1; v <= MAX_VALUE; v++) verifie(mailleBloc(v), `bloc ${v}`);
+    for (let v = 1; v <= MAX_VALUE; v++) verifie(maille(v), `bloc ${v}`);
   });
 
   it('tient dans le même cadre que le dessin', () => {
@@ -132,7 +142,7 @@ describe('les blocs en volume', () => {
         top: Math.min(...cells.map((c) => c.y)) * UNIT - UNIT / 2,
         bottom: Math.max(...cells.map((c) => c.y)) * UNIT + UNIT / 2,
       };
-      const m = mailleBloc(v);
+      const m = maille(v);
       let l = Infinity, r = -Infinity, h = Infinity, b = -Infinity;
       for (let i = 0; i < m.pos.length; i += 3) {
         l = Math.min(l, m.pos[i]);

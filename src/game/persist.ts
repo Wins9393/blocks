@@ -27,6 +27,32 @@ export interface SavedScene {
 }
 
 /**
+ * Un cube de chantier : sa case, sa matière, et le grain figé à sa naissance.
+ *
+ * Ce n'est pas une valeur qui décrit un assemblage — il n'en a pas — mais ses
+ * cases, une par une. La matière est **par cube**, jamais par bloc : un mur
+ * mêle le chêne et la brique, et souder ne repeint rien.
+ */
+export interface SavedCube {
+  x: number;
+  y: number;
+  m: number;
+  g: number;
+}
+
+export interface SavedPiece {
+  cells: SavedCube[];
+  x: number;
+  y: number;
+  a: number;
+}
+
+export interface SavedBuild {
+  w: number;
+  blocks: SavedPiece[];
+}
+
+/**
  * Les trois modes s'excluent : on est en jeu libre, en missions, ou sur un
  * chantier. Deux interrupteurs indépendants ne diraient jamais lequel est
  * actif — c'est un choix à trois, pas deux bascules.
@@ -143,14 +169,13 @@ function sceneKey(id: string, kind: SceneKind): string {
   return (kind === 'chantier' ? BUILD_PREFIX : SCENE_PREFIX) + id;
 }
 
-export function loadScene(spaceId: string, kind: SceneKind): SavedScene | null {
+export function loadScene(spaceId: string): SavedScene | null {
   // Le tout premier espace hérite de la scène d'avant : on ne fait pas
-  // disparaître la construction en cours en livrant les espaces.
+  // disparaître la construction en cours en livrant les espaces. C'était celle
+  // des nombres, la seule qui existât alors — un chantier n'en hérite jamais.
   const data =
-    read<SavedScene>(sceneKey(spaceId, kind)) ??
-    (kind === 'nombres' && spaceId === DEFAULT_SPACE_ID
-      ? read<SavedScene>(LEGACY_SCENE_KEY)
-      : null);
+    read<SavedScene>(sceneKey(spaceId, 'nombres')) ??
+    (spaceId === DEFAULT_SPACE_ID ? read<SavedScene>(LEGACY_SCENE_KEY) : null);
   if (!data || !Array.isArray(data.blocks) || !Number.isFinite(data.w)) return null;
   const blocks = data.blocks.filter(
     (b) => typeof b?.v === 'number' && Number.isFinite(b.x) && Number.isFinite(b.y),
@@ -158,8 +183,41 @@ export function loadScene(spaceId: string, kind: SceneKind): SavedScene | null {
   return blocks.length ? { w: data.w, blocks } : null;
 }
 
-export function saveScene(spaceId: string, kind: SceneKind, scene: SavedScene) {
-  write(sceneKey(spaceId, kind), scene);
+export function saveScene(spaceId: string, scene: SavedScene) {
+  write(sceneKey(spaceId, 'nombres'), scene);
+}
+
+const entier = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * Un chantier ne se relit que par morceaux entiers : une pièce sans case n'a
+ * pas de forme, un cube sans coordonnées n'a pas de place. On jette la pièce et
+ * pas la sauvegarde — perdre un mur vaut mieux que perdre la maison.
+ */
+export function loadBuild(spaceId: string): SavedBuild | null {
+  const data = read<SavedBuild>(sceneKey(spaceId, 'chantier'));
+  if (!data || !Array.isArray(data.blocks) || !Number.isFinite(data.w)) return null;
+  const blocks = data.blocks
+    .filter((b) => b && Array.isArray(b.cells) && entier(b.x) && entier(b.y))
+    .map((b) => ({
+      x: b.x,
+      y: b.y,
+      a: entier(b.a) ? b.a : 0,
+      cells: b.cells
+        .filter((c) => c && entier(c.x) && entier(c.y))
+        .map((c) => ({
+          x: Math.round(c.x),
+          y: Math.round(c.y),
+          m: entier(c.m) ? Math.round(c.m) : 0,
+          g: entier(c.g) ? Math.round(c.g) : 0,
+        })),
+    }))
+    .filter((b) => b.cells.length > 0);
+  return blocks.length ? { w: data.w, blocks } : null;
+}
+
+export function saveBuild(spaceId: string, build: SavedBuild) {
+  write(sceneKey(spaceId, 'chantier'), build);
 }
 
 export function dropScene(spaceId: string) {

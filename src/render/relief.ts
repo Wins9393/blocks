@@ -22,11 +22,14 @@
  */
 import { UNIT } from '../core/constants';
 import { colorFor } from '../core/palette';
-import { centeredCells, shapeFor } from '../core/shape';
+import { centeredOf, signature } from '../core/shape';
+import type { Shape } from '../core/shape';
+import { matiereFor } from '../core/matieres';
+import type { Skin } from '../core/matieres';
 import { lookFor } from '../core/wardrobe';
 import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { Forge, MAT_MAT, teinte } from './mesh';
-import type { Maille } from './mesh';
+import type { Maille, Vec3 } from './mesh';
 import { Z, objet3D } from './objets3d';
 import type { SlotObjet } from './objets3d';
 
@@ -161,6 +164,9 @@ interface Tampons {
 
 export interface BlocRelief {
   value: number;
+  shape: Shape;
+  /** Matière de chaque cube, sur un chantier. Absente au mode nombre. */
+  skin?: Skin[];
   x: number;
   y: number;
   angle: number;
@@ -199,6 +205,12 @@ const ARRONDI = UNIT * 0.11;
  * bords montrent nettement leur tranche sans que le milieu se déforme.
  */
 const RECUL = 0.82;
+
+/**
+ * Nombre de mailles gardées sur la carte. Cent pour les nombres, et de quoi
+ * tenir les assemblages vivants d'un chantier plus ceux qu'on vient de défaire.
+ */
+const MAILLES_MAX = 240;
 
 export class Relief {
   readonly canvas: HTMLCanvasElement;
@@ -297,12 +309,55 @@ export class Relief {
   }
 
   private tampons(cle: string, fabrique: () => Maille): Tampons | null {
-    if (!this.cache.has(cle)) this.cache.set(cle, this.envoie(fabrique()));
+    if (!this.cache.has(cle)) {
+      this.cache.set(cle, this.envoie(fabrique()));
+      this.degage();
+    }
     return this.cache.get(cle) ?? null;
   }
 
-  private bloc(value: number): Tampons | null {
-    return this.tampons(`bloc:${value}`, () => mailleBloc(value));
+  /**
+   * Au mode nombre il n'y a que cent formes, et le cache se remplit une fois
+   * pour toutes. Un chantier, lui, fabrique une maille neuve à chaque soudure :
+   * sans borne, chaque assemblage abandonné laisserait ses tampons sur la carte
+   * pour la durée de la partie. On jette les plus anciens, qui sont aussi ceux
+   * qu'on ne redessine plus.
+   */
+  private degage() {
+    const gl = this.gl;
+    if (!gl) return;
+    while (this.cache.size > MAILLES_MAX) {
+      const [cle, t] = this.cache.entries().next().value as [string, Tampons | null];
+      if (t) {
+        gl.deleteBuffer(t.pos);
+        gl.deleteBuffer(t.nor);
+        gl.deleteBuffer(t.col);
+        gl.deleteBuffer(t.mat);
+      }
+      this.cache.delete(cle);
+    }
+  }
+
+  /**
+   * La clé dit la forme *et* la matière : deux assemblages de même compte n'ont
+   * pas la même silhouette, et le même mur en chêne ou en brique n'est pas la
+   * même maille. Au mode nombre, la valeur suffit à dire les deux.
+   */
+  private bloc(b: BlocRelief): Tampons | null {
+    const skin = b.skin ?? [];
+    const cle = skin.length
+      ? `bloc:${signature(b.shape.cells)}:${skin.map((s) => s.mat).join(',')}`
+      : `bloc:${b.value}`;
+    return this.tampons(cle, () => {
+      const base = teinte(colorFor(b.value));
+      const couleurs: Vec3[] = skin.length
+        ? skin.map((s) => teinte(matiereFor(s.mat).couleur))
+        : b.shape.cells.map(() => base);
+      const modeles = skin.length
+        ? skin.map((s) => matiereFor(s.mat).modele)
+        : b.shape.cells.map(() => MAT_MAT);
+      return mailleBloc(b.shape, couleurs, modeles);
+    });
   }
 
   private piece(slot: SlotObjet, id: string, part: 'corps' | 'mobile' | 'verre'): Tampons | null {
@@ -401,7 +456,7 @@ export class Relief {
 
     for (const b of blocs) {
       const { modele, normale, biais } = this.repere(b);
-      this.dessine(this.bloc(b.value), modele, normale, biais);
+      this.dessine(this.bloc(b), modele, normale, biais);
       const look = b.look ?? lookFor(b.value, this.wardrobe);
       const tete = this.tete(b, modele);
       if (look.scarf !== 'rien') {
@@ -485,8 +540,8 @@ export class Relief {
 
   /** Le repère de la case qui porte le visage, comme `drawCharacter`. */
   private tete(b: BlocRelief, modele: Float32Array): Float32Array {
-    const cells = centeredCells(b.value);
-    const face = cells[shapeFor(b.value).faceIndex];
+    const cells = centeredOf(b.shape);
+    const face = cells[b.shape.faceIndex];
     return multiplie(modele, translation(face.x * UNIT, face.y * UNIT, 0));
   }
 }
@@ -504,16 +559,23 @@ export class Relief {
  * laissait un trou en étoile à chaque croisement de quatre cases — un défaut
  * bien visible sur un bloc de dix-neuf, où la lumière s'y engouffrait.
  */
-export function mailleBloc(value: number): Maille {
+/**
+ * Le volume d'un bloc : un cube arrondi par case, collés côte à côte.
+ *
+ * La couleur est donnée **par cube**, pas par bloc : au mode nombre les dix
+ * cubes d'un 10 partagent la teinte de leur valeur, mais un mur de chantier
+ * mêle le chêne et la brique, et souder ne repeint rien.
+ */
+export function mailleBloc(shape: Shape, couleurs: Vec3[], modeles: number[]): Maille {
   const f = new Forge();
-  const cells = centeredCells(value);
-  f.peint(teinte(colorFor(value)), MAT_MAT);
-  for (const c of cells) {
+  const cells = centeredOf(shape);
+  cells.forEach((c, i) => {
+    f.peint(couleurs[i] ?? couleurs[0], modeles[i] ?? MAT_MAT);
     f.save();
     f.translate(c.x * UNIT, c.y * UNIT, 0);
     f.boite([UNIT / 2, UNIT / 2, Z], ARRONDI, 3);
     f.restore();
-  }
+  });
   return f.fini();
 }
 

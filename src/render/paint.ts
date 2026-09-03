@@ -1,4 +1,5 @@
 import { UNIT } from '../core/constants';
+import { shapeFor } from '../core/shape';
 import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { drawCharacter, drawHead } from './faces';
 import { Relief } from './relief';
@@ -121,12 +122,23 @@ function vignetteRelief(
 ) {
   const relief = reliefVignette();
   if (!relief) return;
-  const art = blockArt(value);
+  const art = blockArt(shapeFor(value));
   const { scale, x, y } = cadre(art, boxW, boxH);
   relief.setWardrobe(wardrobe ?? {});
   relief.resize(boxW, boxH, dpr);
 
-  const bloc = { value, x, y, angle: 0, sx: scale, sy: scale, rang: 0, dragged: false, look };
+  const bloc = {
+    value,
+    shape: shapeFor(value),
+    x,
+    y,
+    angle: 0,
+    sx: scale,
+    sy: scale,
+    rang: 0,
+    dragged: false,
+    look,
+  };
   const corps = relief.passeCorps([bloc], 0);
   if (corps) ctx.drawImage(corps, 0, 0, boxW, boxH);
 

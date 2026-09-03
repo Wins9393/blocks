@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPrime, rectanglesFor, shapeFor } from './shape';
+import { connectedParts, isPrime, rectanglesFor, rectanglesOf, shapeFor, shapeOf } from './shape';
 import { MAX_VALUE } from './constants';
 
 describe('shapeFor', () => {
@@ -104,6 +104,98 @@ describe('rectanglesFor', () => {
   it('donne une seule pièce aux rectangles pleins', () => {
     for (const n of [1, 2, 3, 4, 6, 8, 9, 10, 12, 16, 20]) {
       expect(rectanglesFor(n)).toHaveLength(1);
+    }
+  });
+});
+
+describe('shapeOf', () => {
+  const equerre = [
+    { x: 4, y: 7 },
+    { x: 4, y: 8 },
+    { x: 5, y: 8 },
+  ];
+
+  it('ramène la forme à l’origine sans toucher à l’ordre', () => {
+    // L'ordre est ce qui relie chaque case à sa matière : le mélanger
+    // repeindrait les cubes au premier assemblage.
+    const shape = shapeOf(equerre);
+    expect(shape.cells).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ]);
+    expect(shape.w).toBe(2);
+    expect(shape.h).toBe(2);
+  });
+
+  it('rend la forme canonique quand on lui donne ses cases', () => {
+    for (let v = 1; v <= 40; v++) {
+      const canon = shapeFor(v);
+      expect(shapeOf(canon.cells)).toEqual(canon);
+    }
+  });
+});
+
+describe('connectedParts', () => {
+  it('ne perd ni ne double aucune case', () => {
+    const cells = [
+      { x: 0, y: 0 },
+      { x: 5, y: 5 },
+      { x: 0, y: 1 },
+      { x: 9, y: 0 },
+    ];
+    const parts = connectedParts(cells);
+    const tous = parts.flat().sort((a, b) => a - b);
+    expect(tous).toEqual([0, 1, 2, 3]);
+    expect(parts).toHaveLength(3);
+  });
+
+  it('ne relie pas par le coin', () => {
+    // Deux cases en diagonale ne se tiennent pas : sinon couper un escalier
+    // rendrait un résultat que personne ne saurait prédire.
+    expect(connectedParts([{ x: 0, y: 0 }, { x: 1, y: 1 }])).toHaveLength(2);
+  });
+
+  it('rend trois morceaux quand un U est tranché en travers de ses branches', () => {
+    // Le cas qui interdit de croire qu'une coupe droite rend deux moitiés.
+    const u = [
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ];
+    expect(connectedParts(u)).toHaveLength(1);
+    const haut = u.filter((c) => c.y === 0);
+    expect(connectedParts(haut)).toHaveLength(2);
+  });
+});
+
+describe('rectanglesOf', () => {
+  const formes = [
+    // Une équerre, un U, un escalier : rien de canonique.
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 }],
+    [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+    [{ x: 0, y: 2 }, { x: 1, y: 2 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 0 }],
+  ];
+
+  it('pave exactement une forme quelconque, sans trou ni recouvrement', () => {
+    for (const cells of formes) {
+      const shape = shapeOf(cells);
+      const couvert = new Set<string>();
+      for (const r of rectanglesOf(shape)) {
+        for (let dy = 0; dy < r.h; dy++) {
+          for (let dx = 0; dx < r.w; dx++) {
+            const x = r.x - (r.w - 1) / 2 + dx + (shape.w - 1) / 2;
+            const y = r.y - (r.h - 1) / 2 + dy + (shape.h - 1) / 2;
+            const k = `${Math.round(x)},${Math.round(y)}`;
+            expect(couvert.has(k)).toBe(false);
+            couvert.add(k);
+          }
+        }
+      }
+      expect(couvert.size).toBe(shape.cells.length);
+      for (const c of shape.cells) expect(couvert.has(`${c.x},${c.y}`)).toBe(true);
     }
   });
 });

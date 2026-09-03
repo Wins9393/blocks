@@ -363,7 +363,10 @@ export default function App() {
         state={state}
         wardrobe={wardrobe}
         allowed={affichee && paletteFor(affichee)}
-        onPick={(v) => gameRef.current?.spawn(v)}
+        matieres={mode === 'construction'}
+        onPick={(v) =>
+          mode === 'construction' ? gameRef.current?.poseCube(v) : gameRef.current?.spawn(v)
+        }
       />
 
       {hintsOpen && <Hints wardrobe={wardrobe} onClose={closeHints} />}

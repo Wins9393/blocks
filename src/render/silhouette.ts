@@ -1,5 +1,6 @@
 import { UNIT } from '../core/constants';
-import { centeredCells, shapeFor } from '../core/shape';
+import { centeredOf, signature } from '../core/shape';
+import type { Shape } from '../core/shape';
 
 /** Rayon des arrondis de la silhouette, en pixels. */
 export const CORNER = UNIT * 0.2;
@@ -26,7 +27,12 @@ export interface BlockArt {
   right: number;
 }
 
-const cache = new Map<number, BlockArt>();
+/**
+ * Mis en cache sur la signature des cases, plus sur la valeur : un assemblage
+ * de construction n'a pas de valeur, et deux assemblages de même compte n'ont
+ * pas la même silhouette.
+ */
+const cache = new Map<string, BlockArt>();
 
 const key = (x: number, y: number) => `${x},${y}`;
 
@@ -48,12 +54,12 @@ function runs(values: number[]): Array<[number, number]> {
   return out;
 }
 
-export function blockArt(value: number): BlockArt {
-  const hit = cache.get(value);
+export function blockArt(shape: Shape): BlockArt {
+  const cle = signature(shape.cells);
+  const hit = cache.get(cle);
   if (hit) return hit;
 
-  const shape = shapeFor(value);
-  const cells = centeredCells(value);
+  const cells = centeredOf(shape);
   const occupied = new Set(shape.cells.map((c) => key(c.x, c.y)));
   const half = UNIT / 2;
   const r = CORNER;
@@ -135,6 +141,6 @@ export function blockArt(value: number): BlockArt {
     left: Math.min(...cells.map((c) => c.x)) * UNIT - half,
     right: Math.max(...cells.map((c) => c.x)) * UNIT + half,
   };
-  cache.set(value, art);
+  cache.set(cle, art);
   return art;
 }

@@ -407,10 +407,95 @@ espace quitté sur son chantier le retrouve. Le réglage d'avant les trois modes
 dernière fois puis jamais réécrit, pour ne pas renvoyer au jeu libre, dans son
 dos, quelqu'un qui avait quitté en mission.
 
-**Il n'y a pour l'instant que le squelette.** Le chantier se pose, se garde et se
-retrouve, mais il se remplit encore des blocs numérotés du jeu libre. Les
-matières, la soudure au point de contact et le monde plus grand que l'écran
-viennent ensuite.
+### Un bloc n'est plus un nombre, c'est ses cases
+
+Au mode nombre, `value` est l'unique source de vérité : la forme, la couleur, le
+visage, la maille et la sauvegarde en découlent tous. Un bloc n'est pas une
+forme, c'est un nombre qui *sait* se dessiner.
+
+La soudure au point de contact casse ça à la racine, puisqu'elle produit un
+polyomino quelconque — un L, un T, un escalier — qui ne se range dans aucun
+`shapeFor(n)`. **La forme est donc devenue une donnée de plein droit**
+(`shapeOf`), et `value` n'est plus qu'un compte de cubes. Les deux modes
+partagent le même moteur : le mode nombre passe simplement `shapeFor(v)` là où
+il passait `v`.
+
+**La matière est par cube, jamais par bloc.** Un mur mêle le chêne et la brique,
+et souder ne repeint rien. Chaque cube porte donc sa matière et **le grain figé
+à sa naissance** — une graine tirée une fois pour toutes, si bien que le veinage
+d'un cube ne change plus jamais, ni quand on l'assemble, ni quand on le coupe. Un
+grain calé sur l'assemblage sauterait à chaque brique posée, parce que son
+centre de masse bouge.
+
+L'ordre des cases est l'unique lien entre une case et sa matière : `shapeOf` le
+conserve tel quel, et tout ce qui découpe — la coupe, la secousse — voyage avec
+ses indices plutôt qu'avec ses points.
+
+### Les gestes du chantier
+
+| Geste | Effet |
+| --- | --- |
+| Appuyer sur une **matière** | un cube de cette matière tombe dans la scène |
+| Glisser un bloc contre un autre, puis lâcher | il se soude, aimanté sur la grille de sa cible |
+| Tenir un bloc et le **secouer** | détache le cube que le doigt tient |
+| Tracer un **trait franc** | coupe, et chaque morceau connexe devient un bloc |
+
+**La règle de fusion n'a pas bougé d'une ligne** : `MERGE_MIN_TRAVEL` de trajet,
+un candidat à moins de `MERGE_GAP`, et un lâcher. Le contact passif ne soude
+rien, le lâcher volontaire soude. Seul le *résultat* change — on garde la
+géométrie au lieu de recanonicaliser. La conséquence est à assumer : en
+pratique, presque tout ce qu'on pose se soude, puisqu'on le pose en le poussant
+contre son voisin. Pour empiler sans coller, on lâche d'un peu plus haut.
+
+**Tout se joue dans la grille du bloc cible** (`src/core/build.ts`). On y exprime
+la pose du bloc tiré, on arrondit au cube près *et au quart de tour*, et on
+cherche la place la plus proche qui tienne. L'assemblage garde l'inclinaison de
+la cible, et **la cible ne bouge pas d'un pixel** : le corps est replacé pour que
+sa première case retombe exactement où elle était. Voir sa maison se recentrer à
+chaque brique serait insupportable.
+
+**La soudure se fait par l'arête, jamais par le coin.** Deux conditions et pas
+une de plus : aucune case sur une case prise, et au moins une arête partagée. Si
+la place visée est occupée, on essaie les voisines par ordre de distance ; si
+rien ne convient, on refuse. Pousser le voisin d'un cran serait un moteur de
+dominos — appuyer dans un mur plein déplacerait toute une rangée sous le doigt.
+
+Le coin est écarté pour une raison qui se paie deux gestes plus loin : avec deux
+définitions de connexité en lice, **couper une diagonale rendrait un résultat que
+personne ne saurait prédire**. Et un escalier tenu par les angles n'a l'air
+solide dans aucun monde.
+
+**Une coupe ne rend pas deux moitiés, mais autant de morceaux qu'elle en
+détache.** Un U tranché en travers de ses branches en donne trois. Même chose
+pour la secousse : ôter le cube du milieu d'un pont en laisse deux. Les deux
+gestes passent donc par le même découpage en groupes qui se tiennent par une
+arête (`connectedParts`), et chaque morceau est reposé là où ses cubes se
+trouvent déjà — sinon ce qui reste sauterait.
+
+**La secousse détache le cube que le doigt tient**, pas une unité prise au bord.
+C'est le geste qui répare l'erreur ancienne : l'annulation ne défait que le
+dernier geste, et une brique mal posée se voit trois briques plus tard. Sans
+lui, il faudrait couper la maison en deux pour la corriger.
+
+### Ce que le rendu a dû apprendre
+
+La silhouette et la maille étaient mises en cache **par valeur** ; elles le sont
+maintenant par signature de cases — deux assemblages de même compte n'ont pas la
+même forme, et le même mur en chêne ou en brique n'est pas la même maille. Les
+couleurs et les modèles d'éclairage se donnent cube par cube.
+
+Un cache par valeur se remplissait une fois pour toutes : il n'y a que cent
+formes. **Un chantier, lui, fabrique une maille neuve à chaque soudure**, et
+chaque assemblage abandonné laisserait ses tampons sur la carte pour la durée de
+la partie. Le cache est donc borné, et jette les plus anciens — qui sont aussi
+ceux qu'on ne redessine plus.
+
+Ni visage ni pastille sur un chantier : c'est la matière qui dit ce qu'on
+regarde, et un personnage y ferait revenir le nombre par la fenêtre.
+
+**Ce qui n'y est pas encore.** Il n'y a qu'une matière, sans grain, et le monde
+s'arrête toujours au bord de l'écran. Les dix matières puis la caméra viennent
+ensuite.
 
 ## Architecture
 
