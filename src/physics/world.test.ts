@@ -84,3 +84,51 @@ describe('les bornes du monde', () => {
     expect(320 / UNIT).toBeLessThan(MONDE_W);
   });
 });
+
+describe('prendre et rendre un bloc', () => {
+  const monde = () => {
+    const w = new World();
+    w.resize(MONDE.w, MONDE.h, SOL_Y);
+    return w;
+  };
+
+  it('sort le bloc du monde pour de bon', () => {
+    // Tenu sous la ligne de pose, un bloc ne doit plus exister pour personne :
+    // sinon il bouscule les blocs bâtis avec un corps qu'on ne voit pas.
+    const w = monde();
+    const bloc = w.add(shapeFor(3), 400, 400);
+    const autre = w.add(shapeFor(1), 800, 400);
+    expect(w.prendre(bloc.id)).not.toBeNull();
+    expect(w.blocks.has(bloc.id)).toBe(false);
+    expect(w.engine.world.bodies).not.toContain(bloc.body);
+    expect(w.totalUnits).toBe(autre.value);
+    expect(w.blockAt({ x: 400, y: 400 })).toBeNull();
+  });
+
+  it('le refait à l identique, identité comprise', () => {
+    // Il remonte : c est le même bloc qui reparaît, pas un neuf. Sa forme
+    // soudée, sa matière et son inclinaison sont celles qu il avait.
+    const w = monde();
+    const skin = [
+      { mat: 4, seed: 11 },
+      { mat: 7, seed: 22 },
+    ];
+    const bloc = w.add(shapeOf([{ x: 0, y: 0 }, { x: 1, y: 0 }]), 300, 200, 0.4, undefined, undefined, skin);
+    const cle = bloc.cle;
+    const empreinte = w.prendre(bloc.id)!;
+    const revenu = w.rendre(empreinte, 500, 250);
+    expect(revenu.id).toBe(bloc.id);
+    expect(revenu.value).toBe(bloc.value);
+    expect(revenu.cle).toBe(cle);
+    expect(revenu.skin).toEqual(skin);
+    expect(revenu.body.angle).toBeCloseTo(0.4, 6);
+    expect(revenu.body.position.x).toBeCloseTo(500, 6);
+    expect(revenu.body.position.y).toBeCloseTo(250, 6);
+    expect(w.engine.world.bodies).toContain(revenu.body);
+    expect(w.blockAt({ x: 500, y: 250 })?.id).toBe(bloc.id);
+  });
+
+  it('ne rend rien d un bloc qui n existe pas', () => {
+    expect(monde().prendre(4242)).toBeNull();
+  });
+});

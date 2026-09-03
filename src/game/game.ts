@@ -41,7 +41,7 @@ import * as sfx from '../audio/sfx';
 import { ShakeDetector, partitionByCut, segmentHitsBox, sliceFromPath } from '../input/gestures';
 import type { Cut, Sample } from '../input/gestures';
 import { World, minPartGap, rightingSpin } from '../physics/world';
-import type { Block } from '../physics/world';
+import type { Block, Empreinte } from '../physics/world';
 import type { Wardrobe } from '../core/wardrobe';
 import { Renderer } from '../render/renderer';
 import type { Apercu, BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
@@ -106,6 +106,12 @@ interface Drag {
    * quelque chose.
    */
   bordArme: boolean;
+  /**
+   * Le bloc, **retiré du monde** parce que le doigt l'a descendu sous la ligne
+   * de pose. Non nul = il n'existe plus pour personne : ni corps, ni image, ni
+   * compte. Voir `suitLaLigneDePose`.
+   */
+  retire: Empreinte | null;
   /**
    * L'état d'avant, pour un cube venu de la barre. Il est pris dès l'appui sur
    * le bouton (`EnMain.avant`) et voyage avec le cube.
@@ -479,6 +485,7 @@ export class Game {
       shake,
       candidate: null,
       bordArme: false,
+      retire: null,
       avant: main.avant,
     });
 
@@ -836,6 +843,7 @@ export class Game {
         shake,
         candidate: null,
         bordArme: false,
+        retire: null,
         avant: null,
       });
     } else {
@@ -917,6 +925,9 @@ export class Game {
       const ecran = this.toEcran(e);
       drag.ex = ecran.x;
       drag.ey = ecran.y;
+      this.suitLaLigneDePose(drag);
+      // Un bloc qui n'est plus là ne se secoue pas.
+      if (drag.retire) return;
       if (drag.shake.push({ x: p.x, y: p.y, t: e.timeStamp })) this.peel(drag);
       return;
     }
@@ -984,6 +995,38 @@ export class Game {
     };
   }
 
+  /**
+   * Un bloc tenu sous la ligne de pose sort du monde, et y revient dès qu'il
+   * remonte.
+   *
+   * Sous cette ligne, `tenable` l'épinglait au sol : son image passait bien sous
+   * la bande de sol, mais son corps restait sur le chantier, à glisser le long
+   * de la ligne en bousculant les blocs bâtis — un bulldozer qu'on ne voyait
+   * pas. C'est le défaut du cube de la barre, vu de l'autre côté, et il se règle
+   * de la même façon : sous la ligne, le bloc n'est plus là. Lâché là, il s'en
+   * va (`jete`) ; remonté, il reparaît sous le doigt, exactement où il est.
+   *
+   * C'est le point visé qui décide, pas le doigt : on attrape un bloc par où on
+   * veut, et c'est le bloc qui passe sous le sol, pas la main.
+   */
+  private suitLaLigneDePose(drag: Drag) {
+    // Au mode nombre, sous le sol il y a la corbeille : c'est une trappe où l'on
+    // *jette*, et le bloc doit y rester visible jusqu'au lâcher. Rien à retirer.
+    if (!this.chantier) return;
+    const dehors = drag.py + drag.oy > this.ligneDePose;
+    if (dehors === (drag.retire !== null)) return;
+    if (dehors) {
+      drag.retire = this.world.prendre(drag.blockId);
+      // Ce qu'on montrerait ne se produira pas : il n'y a plus rien à souder.
+      drag.candidate = null;
+    } else if (drag.retire) {
+      this.track(this.world.rendre(drag.retire, drag.px + drag.ox, drag.py + drag.oy), 0);
+      drag.retire = null;
+    }
+    this.dirty = true;
+    this.emit();
+  }
+
   private applyDrags() {
     for (const drag of this.drags.values()) {
       const block = this.world.blocks.get(drag.blockId);
@@ -1037,16 +1080,30 @@ export class Game {
    * est pire que pas de suppression du tout.
    */
   private jete(drag: Drag): boolean {
-    return this.chantier
-      ? drag.ey > this.vue.h - this.vue.inset
-      : this.world.isOverTrash({ x: drag.px, y: drag.py });
+    if (!this.chantier) return this.world.isOverTrash({ x: drag.px, y: drag.py });
+    // Deux dehors, une seule règle. La barre, fixée à l'écran, où l'on rend le
+    // cube ; et le dessous de la ligne de pose, où le bloc n'a déjà plus ni
+    // corps ni image. Lâcher dans l'un ou l'autre, c'est ranger.
+    return drag.ey > this.vue.h - this.vue.inset || drag.retire !== null;
   }
 
   private releaseDrag(drag: Drag) {
+    // Le sort du geste se lit **avant** de toucher à quoi que ce soit : c'est
+    // `drag.retire` qui dit qu'on tenait le bloc hors du chantier, et le remettre
+    // effacerait la réponse.
+    const range = this.jete(drag);
+    // Un bloc tenu sous la ligne de pose n'est plus dans le monde : on l'y remet
+    // le temps de le ranger. Le rangement est ainsi exactement celui de la
+    // barre — même son, même poussière, même annulation — et il n'y a pas deux
+    // façons de s'en aller.
+    if (drag.retire) {
+      this.world.rendre(drag.retire, drag.px + drag.ox, drag.py + drag.oy);
+      drag.retire = null;
+    }
     const block = this.world.blocks.get(drag.blockId);
     if (!block) return;
 
-    if (this.jete(drag)) {
+    if (range) {
       // Un cube tiré de la barre et rendu à la barre n'a jamais existé : il
       // s'en va sans le bruit de la corbeille et sans rien laisser à annuler.
       if (drag.avant) {

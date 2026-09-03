@@ -458,8 +458,24 @@ encore, et le promener sous la barre **bousculait les blocs déjà bâtis**, par
 corps qu'on ne voyait pas. Il n'a donc plus ni corps ni image jusqu'à ce que le
 doigt l'amène là où il peut vraiment se tenir.
 
-Où, exactement ? Là où il naîtra **au pixel sous le doigt** : hors de la barre,
-et au-dessus de la ligne de pose. Il faut bien les deux, et pour deux raisons
+**Et la règle vaut dans l'autre sens, pour tout bloc.** Un bloc du chantier
+descendu sous la ligne de pose avait le même défaut, à l'envers : son image
+passait bien sous la bande de sol, mais `tenable` épinglait son corps à la ligne,
+où il continuait de glisser en bousculant les blocs bâtis — un bulldozer qu'on ne
+voyait pas. Sous la ligne, il **sort donc du monde** : plus de corps, plus
+d'image, plus d'ombre, plus rien à attraper. Lâché là, il s'en va ; remonté, il
+reparaît sous le doigt, à sa taille, avec son identité et sa forme soudée.
+
+C'est le point visé qui décide, pas le doigt : on attrape un bloc par où on veut,
+et c'est le bloc qui passe sous le sol, pas la main. Et **le chantier n'a qu'un
+seul dehors** — la barre et le dessous de la ligne mènent au même rangement, même
+son, même poussière, même annulation. C'est pour ça que le bloc est *remis* dans
+le monde une fraction de seconde avant d'être rangé : il n'y a pas deux façons de
+s'en aller. Au mode nombre, rien de tout ça : sous le sol il y a la corbeille,
+une trappe où l'on jette, et le bloc doit y rester visible jusqu'au lâcher.
+
+Où naît-il, exactement ? Là où il naîtra **au pixel sous le doigt** : hors de la
+barre, et au-dessus de la ligne de pose. Il faut bien les deux, et pour deux raisons
 différentes. La barre est bornée à l'écran ; la ligne de pose est dans le monde,
 et un bloc tenu ne descend jamais plus bas (`tenable`). Cadré en haut d'une tour,
 le sol est hors de vue et seule la barre décide ; caméra posée au sol, c'est la

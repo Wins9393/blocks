@@ -40,6 +40,20 @@ export interface Bounds {
   y: number;
 }
 
+/**
+ * De quoi refaire un bloc à l'identique après l'avoir retiré du monde : sa
+ * forme, sa matière, sa pose et son élan. Tout sauf sa position, que celui qui
+ * le remet choisit.
+ */
+export interface Empreinte {
+  id: number;
+  shape: Shape;
+  skin: Skin[];
+  angle: number;
+  velocity: Matter.Vector;
+  angularVelocity: number;
+}
+
 let nextId = 1;
 
 /**
@@ -160,18 +174,44 @@ export class World {
     this.blocks.delete(id);
   }
 
+  /**
+   * Retire un bloc du monde et rend son empreinte. Il cesse d'exister pour tout
+   * le monde : il ne pousse plus rien, ne tombe plus, n'est plus compté, n'est
+   * plus dessiné et ne peut plus être attrapé. `rendre` le refait à l'identique.
+   *
+   * C'est ce qui permet de tenir un bloc *hors* du chantier — sous la ligne de
+   * pose, où son corps n'a rien à faire — sans le perdre pour autant.
+   */
+  prendre(id: number): Empreinte | null {
+    const block = this.blocks.get(id);
+    if (!block) return null;
+    const empreinte: Empreinte = {
+      id,
+      shape: block.shape,
+      skin: block.skin,
+      angle: block.body.angle,
+      velocity: { x: block.body.velocity.x, y: block.body.velocity.y },
+      angularVelocity: block.body.angularVelocity,
+    };
+    this.remove(id);
+    return empreinte;
+  }
+
+  /** Remet dans le monde un bloc qu'on avait pris, à l'endroit voulu. */
+  rendre(empreinte: Empreinte, x: number, y: number): Block {
+    const { id, shape, skin, angle, velocity, angularVelocity } = empreinte;
+    const block = this.add(shape, x, y, angle, velocity, id, skin);
+    Body.setAngularVelocity(block.body, angularVelocity);
+    return block;
+  }
+
   /** Change la forme d'un bloc en place : même identité, même pose. */
   reshape(id: number, shape: Shape, skin: Skin[] = []): Block | null {
     const old = this.blocks.get(id);
     if (!old) return null;
     const { x, y } = old.body.position;
-    const angle = old.body.angle;
-    const velocity = { x: old.body.velocity.x, y: old.body.velocity.y };
-    const angularVelocity = old.body.angularVelocity;
-    this.remove(id);
-    const next = this.add(shape, x, y, angle, velocity, id, skin);
-    Body.setAngularVelocity(next.body, angularVelocity);
-    return next;
+    const empreinte = this.prendre(id);
+    return empreinte && this.rendre({ ...empreinte, shape, skin }, x, y);
   }
 
   clear() {
