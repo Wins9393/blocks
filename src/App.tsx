@@ -31,6 +31,7 @@ import RewardCard from './ui/RewardCard';
 import SpaceMenu from './ui/SpaceMenu';
 import TopBar from './ui/TopBar';
 import Workshop from './ui/Workshop';
+import ZoomBar from './ui/ZoomBar';
 
 type Dialog = { kind: 'new' } | { kind: 'rename'; space: Space } | null;
 
@@ -44,6 +45,7 @@ export default function App() {
     full: false,
     plafond: MAX_UNITS,
     values: [],
+    zoom: null,
   });
   const [prefs, setPrefs] = useState(loadPrefs);
   const [book, setBook] = useState<SpaceBook>(loadSpaces);
@@ -376,6 +378,12 @@ export default function App() {
           gameRef.current?.prendreDansLaBarre(mat, e.pointerId, e.clientX, e.clientY);
         }}
       />
+
+      {/* Le jeu dit lui-même s'il y a une vue à régler : hors chantier la
+          caméra est l'identité, et `zoom` y est nul. */}
+      {state.zoom !== null && (
+        <ZoomBar zoom={state.zoom} onZoom={(sens) => gameRef.current?.zoomer(sens)} />
+      )}
 
       {hintsOpen && <Hints wardrobe={wardrobe} onClose={closeHints} />}
 

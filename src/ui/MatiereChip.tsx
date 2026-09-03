@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { PointerEvent } from 'react';
 import { matiereFor } from '../core/matieres';
 import { drawCubeThumb } from '../render/paint';
@@ -24,6 +25,16 @@ interface Props {
  */
 export default function MatiereChip({ mat, disabled, onTirer, onPoser }: Props) {
   const matiere = matiereFor(mat);
+  /**
+   * Un clic qui suit un pointeur n'a rien à poser : le cube est déjà né sous le
+   * doigt. Le distinguer par `e.detail === 0` paraissait suffire — un clic sans
+   * pointeur vient du clavier — mais dans Firefox le `preventDefault` du
+   * `pointerdown` supprime le `mousedown`, et le compteur de clics reste à
+   * zéro : **chaque vrai clic** prenait le chemin du clavier et posait un
+   * second cube au milieu de la scène. On retient donc le pointeur nous-mêmes,
+   * seul témoin qui ne dépende pas du navigateur.
+   */
+  const tirait = useRef(false);
   return (
     <button
       className="chip tirable"
@@ -32,11 +43,20 @@ export default function MatiereChip({ mat, disabled, onTirer, onPoser }: Props) 
         // Sinon le navigateur ouvre son propre glisser, ou fait défiler la page,
         // et le cube reste collé à la barre.
         e.preventDefault();
+        tirait.current = true;
         onTirer(mat, e);
       }}
-      // Un clic sans pointeur vient du clavier : le bouton ne doit pas rester
-      // mort pour qui ne peut pas tirer.
-      onClick={(e) => e.detail === 0 && onPoser(mat)}
+      // Un glisser abandonné ne rend pas la main au bouton : sans cette remise
+      // à zéro, il mangerait l'appui de touche suivant.
+      onKeyDown={() => {
+        tirait.current = false;
+      }}
+      // Reste le clic sans pointeur — le clavier, ou un lecteur d'écran : le
+      // bouton ne doit pas rester mort pour qui ne peut pas tirer.
+      onClick={() => {
+        if (tirait.current) tirait.current = false;
+        else onPoser(mat);
+      }}
       disabled={disabled}
       aria-label={`Tirer un cube en ${matiere.nom.toLowerCase()}`}
       title={matiere.nom}

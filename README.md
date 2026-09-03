@@ -662,6 +662,64 @@ garde donc quand même sa caméra. Et le cube se pose en haut de **ce qu'on
 regarde**, pas en haut du monde : tomber du plafond d'un monde de trois écrans le
 ferait atterrir hors de vue.
 
+### Le zoom se règle aussi sans doigts
+
+**Un ordinateur n'a qu'un seul pointeur.** Le geste à deux doigts y est
+physiquement impossible, et un pincement de pavé tactile n'envoie pas deux
+`pointerdown` mais des `wheel` — que rien n'écoutait. La caméra du chantier ne
+bougeait donc pas d'un pixel hors du tactile : ni déplacement, ni zoom. C'est le
+même manque que « on ne peut pas zoomer », vu de l'autre côté.
+
+**La molette rend les deux mêmes gestes, lus pareil** : défiler déplace comme
+deux doigts qui glissent, `ctrl`+molette (ce qu'envoie un pincement de pavé)
+zoome comme deux doigts qui s'écartent, `shift` bascule sur l'horizontale pour
+une molette qui n'a pas d'axe pour ça. Deux détails qui coûtent une heure quand
+on les oublie : Firefox compte en **lignes** sur une vraie molette et en pixels
+sur un pavé (`deltaMode`), et le zoom est **exponentiel** — une soustraction
+rendrait le dézoom de plus en plus lent.
+
+**Le zoom se montre en pourcentage, de 0 à 100, sur le bord droit.** Un `+` et un
+`−` seuls ne disent jamais où l'on en est : dézoomé à fond puis rezoomé, on ne
+sait plus si l'on est revenu à la vue de départ. Le nombre le dit.
+
+- **50 % est le zoom de repos**, pas la moyenne des deux bornes. `zoomMin` dépend
+  de la taille de l'écran — 0,28 sur un téléphone, 0,64 sur un ordinateur — donc
+  l'échelle a deux pentes. C'est le prix pour que « la vue normale » se lise au
+  même endroit de la commande partout : à moitié, on retrouve exactement ce qu'on
+  avait en arrivant. 0 % est le monde entier dans la vue, 100 % le plus gros.
+- **Les boutons tombent sur des paliers ronds.** Un zoom arrivé au pincement à
+  43 % remonte à 50, pas à 53 : sinon les crans resteraient décalés pour toujours
+  et le nombre affiché ne serait jamais celui qu'on vise. Cinq appuis mènent d'un
+  bout à l'autre. Un test tient l'aller-retour entre le nombre et l'échelle.
+- **La commande n'existe pas hors chantier**, et c'est le jeu qui le dit
+  (`GameState.zoom` est nul), pas l'habillage : au mode nombre la caméra est
+  l'identité, et un réglage y serait soit inerte, soit destructeur de cette
+  égalité.
+- **Elle flotte sur le côté plutôt que dans la barre du haut**, déjà pleine
+  depuis le sélecteur à trois modes : deux boutons et un nombre de plus la
+  feraient déborder sur un téléphone de 320 px.
+
+**Le zoom des boutons vise le milieu de la vue, celui de la molette le curseur.**
+Les deux passent par la même ancre que le pincement — le point du monde qui était
+sous le geste y reste. L'échelle est bornée **avant** de calculer l'ancre : bornée
+après, le point visé glisserait dès qu'on bute sur une limite.
+
+### `e.detail` n'est pas un témoin de clavier
+
+La barre pose aussi un cube au clavier, pour qui ne peut pas tirer. On
+reconnaissait cet appui à `e.detail === 0` — un clic sans pointeur. **Dans
+Firefox, chaque vrai clic vaut aussi 0** : le `preventDefault()` du `pointerdown`
+(nécessaire, sans lui le navigateur ouvre son propre glisser) supprime le
+`mousedown`, et le compteur de clics ne s'incrémente jamais. Chaque clic prenait
+donc les deux chemins à la fois : un cube tiré sous le doigt, rendu à la barre au
+relâchement, **et** un second lâché du haut de la vue qui tombait au milieu de la
+scène. C'est exactement le symptôme qu'on voyait.
+
+Le remède ne consiste pas à corriger le seuil mais à cesser de déduire : le bouton
+retient lui-même qu'un pointeur l'a ouvert. Conséquence assumée — **un clic de
+souris qui ne sort pas de la barre ne produit plus rien**, ce qui est déjà la
+règle du rangement.
+
 ## Architecture
 
 ```

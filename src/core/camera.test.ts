@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   MONDE,
   ZOOM_MAX,
+  ZOOM_PAS,
+  ZOOM_REPOS,
   cameraDepart,
   cameraIdentite,
   clampCamera,
   toScreen,
   toWorld,
   zoomMin,
+  zoomPourK,
+  zoomPourcent,
+  zoomVoisin,
 } from './camera';
 import type { Vue } from './camera';
 
@@ -85,5 +90,67 @@ describe('la caméra', () => {
       const bas = toWorld(cam, vue, { x: 0, y: vue.h - vue.inset });
       expect(bas.y).toBeGreaterThan(MONDE.h - 1);
     }
+  });
+});
+
+describe('le niveau de zoom affiché', () => {
+  it('dit toujours 50 % du zoom de repos, quel que soit l’écran', () => {
+    // C'est la seule raison d'avoir deux pentes : sur un téléphone le monde
+    // entier tient à 0,28 et sur un grand écran à 0,72, mais « la vue normale »
+    // doit se lire au même endroit de la commande dans les deux cas.
+    for (const vue of vues) expect(zoomPourcent(ZOOM_REPOS, vue)).toBe(50);
+  });
+
+  it('met le monde entier à 0 et le plus gros à 100', () => {
+    for (const vue of vues) {
+      expect(zoomPourcent(zoomMin(vue), vue)).toBe(0);
+      expect(zoomPourcent(ZOOM_MAX, vue)).toBe(100);
+    }
+  });
+
+  it('ne sort jamais de 0 à 100, même hors des bornes', () => {
+    for (const vue of vues) {
+      expect(zoomPourcent(0.001, vue)).toBe(0);
+      expect(zoomPourcent(99, vue)).toBe(100);
+    }
+  });
+
+  it('fait un aller-retour exact entre le nombre montré et l’échelle', () => {
+    // Le nombre et le bouton doivent parler de la même chose : sans cet
+    // aller-retour, appuyer sur + afficherait un palier qu'on n'a pas demandé.
+    for (const vue of vues) {
+      for (let p = 0; p <= 100; p += 5) expect(zoomPourcent(zoomPourK(p, vue), vue)).toBe(p);
+    }
+  });
+
+  it('avance d’un cran rond à chaque appui', () => {
+    // Un zoom arrivé au pincement entre deux crans retombe sur le multiple, et
+    // cinq appuis mènent bien du repos au maximum.
+    const vue = vues[0];
+    expect(zoomPourcent(zoomVoisin(zoomPourK(43, vue), vue, 1), vue)).toBe(50);
+    expect(zoomPourcent(zoomVoisin(zoomPourK(43, vue), vue, -1), vue)).toBe(40);
+    let k = ZOOM_REPOS;
+    for (let i = 0; i < 100 / ZOOM_PAS / 2; i++) k = zoomVoisin(k, vue, 1);
+    expect(zoomPourcent(k, vue)).toBe(100);
+  });
+
+  it('ne dépasse pas les bornes à force d’appuyer', () => {
+    const vue = vues[0];
+    let k = ZOOM_REPOS;
+    for (let i = 0; i < 30; i++) k = zoomVoisin(k, vue, -1);
+    expect(k).toBeCloseTo(zoomMin(vue), 6);
+    for (let i = 0; i < 30; i++) k = zoomVoisin(k, vue, 1);
+    expect(k).toBeCloseTo(ZOOM_MAX, 6);
+  });
+
+  it('reste continu sur un écran qui tient déjà le monde entier', () => {
+    // Là, il n'y a plus de moitié basse à parcourir. L'échelle doit rester une
+    // pente unique : une marche au passage des 50 % ferait sauter le zoom d'un
+    // appui à l'autre.
+    const vue: Vue = { w: 2000, h: 1200, inset: 136 };
+    expect(zoomMin(vue)).toBeGreaterThan(ZOOM_REPOS);
+    expect(zoomPourcent(zoomMin(vue), vue)).toBe(0);
+    expect(zoomPourcent(ZOOM_MAX, vue)).toBe(100);
+    for (let p = 0; p <= 100; p += 5) expect(zoomPourcent(zoomPourK(p, vue), vue)).toBe(p);
   });
 });

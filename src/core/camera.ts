@@ -106,3 +106,63 @@ export function cameraIdentite(vue: Vue): Camera {
   const c = centreVue(vue);
   return { x: c.x, y: c.y, k: 1 };
 }
+
+/**
+ * Le zoom de repos : celui d'un chantier qu'on vient d'ouvrir, et celui que la
+ * commande affiche à 50 %. Le milieu de l'échelle est ce réglage-là et non la
+ * moyenne des deux bornes, parce que le nombre doit dire à l'enfant où il est
+ * *par rapport à la vue normale* : à moitié, il retrouve exactement ce qu'il
+ * avait en arrivant.
+ */
+export const ZOOM_REPOS = 1;
+
+/** Un appui sur + ou − , en points de pourcentage : dix crans de bout en bout. */
+export const ZOOM_PAS = 10;
+
+/**
+ * Les trois repères de l'échelle affichée : 0 % le monde entier dans la vue,
+ * 50 % le zoom de repos, 100 % le plus gros. `zoomMin` dépendant de l'écran,
+ * les deux moitiés n'ont pas la même pente — c'est le prix pour que 50 % veuille
+ * dire la même chose sur un téléphone et sur un grand écran.
+ *
+ * Sur un écran assez grand pour tenir le monde entier au repos, il n'y a plus
+ * de moitié basse : le repère glisse au milieu et l'échelle redevient une seule
+ * pente, sans marche au passage des 50 %.
+ */
+function bornes(vue: Vue, monde: typeof MONDE) {
+  const min = Math.min(zoomMin(vue, monde), ZOOM_MAX);
+  const repos = ZOOM_REPOS > min && ZOOM_REPOS < ZOOM_MAX ? ZOOM_REPOS : (min + ZOOM_MAX) / 2;
+  return { min, repos };
+}
+
+/** L'échelle telle qu'on la montre : un entier de 0 à 100. */
+export function zoomPourcent(k: number, vue: Vue, monde = MONDE): number {
+  const { min, repos } = bornes(vue, monde);
+  // Un écran si grand que le monde y tient déjà au zoom maximal : il n'y a plus
+  // rien à régler, et le nombre n'aurait plus de pente où vivre.
+  if (repos - min < 1e-6) return 0;
+  const p =
+    k <= repos
+      ? (50 * (k - min)) / (repos - min)
+      : 50 + (50 * (k - repos)) / (ZOOM_MAX - repos);
+  return Math.round(Math.min(100, Math.max(0, p)));
+}
+
+/** L'inverse : l'échelle que demande un pourcentage. */
+export function zoomPourK(pourcent: number, vue: Vue, monde = MONDE): number {
+  const { min, repos } = bornes(vue, monde);
+  const p = Math.min(100, Math.max(0, pourcent));
+  return p <= 50 ? min + ((repos - min) * p) / 50 : repos + ((ZOOM_MAX - repos) * (p - 50)) / 50;
+}
+
+/**
+ * Le zoom d'un cran de plus, ou de moins. Le pas se compte en pourcentage et
+ * retombe sur un multiple rond : un zoom arrivé au pincement à 43 % remonte à
+ * 50, pas à 53, sans quoi les paliers resteraient décalés pour toujours et le
+ * nombre affiché ne serait jamais celui qu'on vise.
+ */
+export function zoomVoisin(k: number, vue: Vue, sens: 1 | -1, monde = MONDE): number {
+  const p = zoomPourcent(k, vue, monde) / ZOOM_PAS;
+  const cran = sens > 0 ? Math.floor(p) + 1 : Math.ceil(p) - 1;
+  return zoomPourK(cran * ZOOM_PAS, vue, monde);
+}

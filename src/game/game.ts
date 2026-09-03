@@ -25,11 +25,15 @@ import type { Skin } from '../core/matieres';
 import {
   MONDE,
   SOL_Y,
+  ZOOM_MAX,
   cameraDepart,
   cameraIdentite,
   centreVue,
   clampCamera,
   toWorld,
+  zoomMin,
+  zoomPourcent,
+  zoomVoisin,
 } from '../core/camera';
 import type { Camera, Vue } from '../core/camera';
 import * as sfx from '../audio/sfx';
@@ -57,6 +61,12 @@ export interface GameState {
   plafond: number;
   /** Valeurs des blocs présents : c'est là-dessus que les missions statuent. */
   values: number[];
+  /**
+   * L'échelle de la vue, de 0 à 100. **Nulle hors chantier** : au mode nombre
+   * la caméra est l'identité, et une commande de zoom y serait soit inerte,
+   * soit destructrice de cette égalité. C'est le jeu qui le dit, pas l'habillage.
+   */
+  zoom: number | null;
 }
 
 interface Visual {
@@ -120,6 +130,14 @@ interface Nav {
 
 const UNDO_DEPTH = 40;
 
+/**
+ * Molette. `LIGNE_PX` convertit les crans que Firefox compte en lignes ;
+ * `ZOOM_MOLETTE` est la hauteur de défilement qui multiplie l'échelle par e —
+ * plus il est grand, plus le zoom est doux.
+ */
+const LIGNE_PX = 16;
+const ZOOM_MOLETTE = 320;
+
 export class Game {
   readonly world = new World();
   private renderer: Renderer;
@@ -181,6 +199,9 @@ export class Game {
     this.handleResize();
     window.addEventListener('resize', this.handleResize);
     this.canvas.addEventListener('pointerdown', this.onPointerDown);
+    // `passive: false` : la molette du chantier remplace le geste du navigateur
+    // (défilement de page, zoom du document), il faut donc pouvoir l'annuler.
+    this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
     // Suite du geste écoutée sur la fenêtre, pas sur le canvas : la capture de
     // pointeur est capricieuse au doigt, et sans elle un glisser qui passe
     // au-dessus d'une barre d'interface perdait ses mouvements en route — le
@@ -203,6 +224,7 @@ export class Game {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.handleResize);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointercancel', this.onPointerUp);
@@ -228,6 +250,7 @@ export class Game {
       full: this.world.totalUnits >= this.plafond,
       plafond: this.plafond,
       values: [...this.world.blocks.values()].map((b) => b.value),
+      zoom: this.zoomAffiche(),
     };
   }
 
@@ -254,6 +277,9 @@ export class Game {
 
     this.renderer.resize(w, h);
     this.poseLeMonde(w, h);
+    // Le zoom se lit en pourcentage d'une vue qui vient de changer de taille :
+    // 50 % n'y désigne plus la même échelle, et le nombre affiché doit suivre.
+    this.emit();
   };
 
   /**
@@ -278,9 +304,43 @@ export class Game {
 
   /** Bouger la caméra passe toujours par ici : elle reste dans les bornes. */
   private cadre(cam: Camera) {
+    const avant = this.zoomAffiche();
     this.camera = clampCamera(cam, this.vue);
     if (this.chantier) this.camChantier = this.camera;
     this.dirty = true;
+    // Le nombre montré par la commande suit le pincement comme il suit les
+    // boutons. Mais seulement quand il change : `cadre` est appelé à chaque
+    // image pendant un défilement au bord, et React n'a rien à y faire.
+    if (this.zoomAffiche() !== avant) this.emit();
+  }
+
+  /** L'échelle telle que la commande la montre — nulle hors chantier. */
+  private zoomAffiche(): number | null {
+    return this.chantier ? zoomPourcent(this.camera.k, this.vue) : null;
+  }
+
+  /**
+   * Poser le zoom en gardant sous un point de l'écran le point du monde qui y
+   * était. C'est déjà la règle du pincement à deux doigts — sans cette ancre
+   * l'image fuit sous la main — et la molette comme les boutons la suivent.
+   *
+   * L'échelle est bornée **avant** de calculer l'ancre : bornée après, elle
+   * ferait glisser le point visé dès qu'on bute sur une limite.
+   */
+  private zoomeVers(voulu: number, ecran: { x: number; y: number }) {
+    const k = Math.min(ZOOM_MAX, Math.max(zoomMin(this.vue), voulu));
+    const sous = toWorld(this.camera, this.vue, ecran);
+    const c = centreVue(this.vue);
+    this.cadre({ x: sous.x - (ecran.x - c.x) / k, y: sous.y - (ecran.y - c.y) / k, k });
+  }
+
+  /**
+   * Un cran de zoom, depuis la commande. Il vise le milieu de la vue : c'est ce
+   * qu'on regarde, et rien d'autre ne bouge sous les yeux.
+   */
+  zoomer(sens: 1 | -1) {
+    if (!this.chantier) return;
+    this.zoomeVers(zoomVoisin(this.camera.k, this.vue, sens), centreVue(this.vue));
   }
 
   private onVisibility = () => {
@@ -657,6 +717,50 @@ export class Game {
   }
 
 
+
+  /**
+   * La molette, c'est-à-dire le chantier sur un ordinateur.
+   *
+   * Un ordinateur n'a **qu'un seul pointeur** : le geste à deux doigts y est
+   * physiquement impossible, et un pincement de pavé tactile n'envoie pas deux
+   * `pointerdown` mais des `wheel`. Sans cet écouteur, la caméra du chantier ne
+   * bougeait pas d'un pixel hors du tactile — ni déplacement, ni zoom.
+   *
+   * Les deux gestes sont les mêmes qu'au doigt et se lisent pareil : deux
+   * doigts qui glissent déplacent, deux doigts qui s'écartent zooment. Un
+   * pincement de pavé arrive avec `ctrlKey`, c'est la convention du Web.
+   */
+  private onWheel = (e: WheelEvent) => {
+    // Au mode nombre le monde est l'écran : il n'y a rien à cadrer, et rien à
+    // prendre au navigateur.
+    if (!this.chantier) return;
+    e.preventDefault();
+    // Firefox compte en lignes sur une vraie molette, en pixels sur un pavé
+    // tactile : sans conversion, un cran de molette y vaudrait trois pixels.
+    const pas = e.deltaMode === 1 ? LIGNE_PX : e.deltaMode === 2 ? this.vue.h : 1;
+    const dy = e.deltaY * pas;
+    if (e.ctrlKey || e.metaKey) {
+      const rect = this.canvas.getBoundingClientRect();
+      // Exponentielle, pour que le zoom aille aussi vite dans les deux sens :
+      // une soustraction rendrait le dézoom de plus en plus lent.
+      this.zoomeVers(this.camera.k * Math.exp(-dy / ZOOM_MOLETTE), {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      return;
+    }
+    // Le déplacement se compte à l'écran puis se traduit dans le monde : à
+    // moitié zoomé, un cran de molette doit faire défiler d'autant de pixels
+    // vus, pas d'autant de pixels monde.
+    // `shift` bascule sur l'horizontale — un pavé tactile donne déjà `deltaX`,
+    // une molette n'a pas d'axe pour ça.
+    const dx = (e.shiftKey ? dy : e.deltaX * pas) / this.camera.k;
+    this.cadre({
+      ...this.camera,
+      x: this.camera.x + dx,
+      y: this.camera.y + (e.shiftKey ? 0 : dy / this.camera.k),
+    });
+  };
 
   private onPointerDown = (e: PointerEvent) => {
     e.preventDefault();
