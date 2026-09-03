@@ -7,6 +7,16 @@ export const MAX_VALUE = 100;
 /** Nombre total de cubes autorisés dans la scène (garde-fou perfs). */
 export const MAX_UNITS = 150;
 
+/**
+ * Le même plafond, sur un chantier. Plus haut que celui des nombres parce que
+ * le monde y est plus grand que l'écran : 400 cubes occupent 42 % des 960 cases
+ * du chantier, ce qui laisse de l'air pour manœuvrer.
+ *
+ * Ce n'est ni Matter ni le GPU qui le fixent — un assemblage soudé compte pour
+ * un corps, et la maille se refait à la soudure, pas à l'image. C'est la place.
+ */
+export const MAX_CUBES = 400;
+
 /** Physique. */
 export const GRAVITY_Y = 1.15;
 export const FIXED_DT = 1000 / 60;

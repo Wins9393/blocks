@@ -243,6 +243,12 @@ export interface BlocRelief {
   angle: number;
   sx: number;
   sy: number;
+  /**
+   * Échelle de la **profondeur**. Le zoom du chantier est une homothétie
+   * uniforme : sans elle, un bloc dézoomé garderait son épaisseur et
+   * passerait de cube à dalle.
+   */
+  sz?: number;
   /** Rang de dessin : il devient la profondeur. */
   rang: number;
   dragged: boolean;
@@ -476,8 +482,13 @@ export class Relief {
    * trait vient couvrir, et elle est plus près de l'œil que le plan médian.
    */
   get avantPlan(): number {
+    return this.avantPlanPour(1);
+  }
+
+  /** Le même, quand le monde est vu à l'échelle `zoom` : l'épaisseur suit. */
+  avantPlanPour(zoom: number): number {
     const d = this.oeilZ;
-    return d / (d - Z);
+    return d / (d - Z * zoom);
   }
 
   /**
@@ -613,7 +624,7 @@ export class Relief {
   private repere(b: BlocRelief) {
     const modele = multiplie(
       multiplie(translation(b.x, b.y, 0), rotationZ(b.angle)),
-      echelle(b.sx, b.sy, 1),
+      echelle(b.sx, b.sy, b.sz ?? 1),
     );
     // Les normales ignorent l'écrasement : il est faible, et l'inverser coûte
     // plus cher que ce qu'il apporte.

@@ -556,8 +556,67 @@ réglerait mieux la question, mais rendrait du même coup les lunettes de vue pl
 opaques dans le mode nombre : ce n'est pas un réglage qui se change d'un côté
 seulement.
 
-**Ce qui n'y est pas encore.** Le monde s'arrête toujours au bord de l'écran.
-La caméra vient ensuite.
+### Le monde est plus grand que l'écran
+
+**Un chantier borné, 40 × 24 cases**, plus une bande de sol — une taille fixe qui
+ne dépend pas de l'écran. Sans bord, un cube poussé vers la droite disparaît et
+rien ne dit qu'il existe encore : un enfant de quatre ans ne part pas à sa
+recherche. 960 cases, dont le plafond de **400 cubes** occupe 42 % — le reste est
+l'air qu'il faut pour poser, glisser et couper. Ce n'est ni Matter ni le GPU qui
+fixent ce plafond : un assemblage soudé compte pour un corps, et la maille se
+refait à la soudure, pas à l'image. C'est la place.
+
+À `UNIT = 36`, le terrain d'un téléphone tient **130 cases en tout**. Le chantier
+en fait sept fois plus, et c'est le seul moyen d'y bâtir autre chose qu'un mur.
+
+**Au mode nombre, la caméra est l'identité — au sens strict.** Elle vise le
+centre de la vue à l'échelle 1, si bien que `toScreen` et `toWorld` rendent leur
+argument inchangé. Les deux modes passent par le même chemin et le mode nombre
+n'y perd pas un pixel : `RECUL`, `avantPlan`, l'écart de trois pixels entre le
+dessin et la forme de collision — tout ce qui a été mesuré le reste. Un test
+tient cette égalité.
+
+Trois endroits seulement voient la caméra, et c'est ce qui a rendu la chose
+faisable : **le goulot du pointeur** (`toLocal`, qui n'était que
+`clientX - rect.left`), **le canvas 2D** (un `translate`/`scale` posé après le
+`dpr`), et **le passage du monde à l'écran dans `drawBlocs`**, puisque le relief
+travaille déjà en pixels d'écran. Le ciel, lui, ne défile pas : il se peint à
+l'écran, seule sa ligne d'horizon suit la caméra.
+
+**Zoomer est une homothétie uniforme, profondeur comprise.** L'échelle s'applique
+aussi à `sz`, sans quoi un bloc dézoomé garderait son épaisseur : à 0,5× il
+deviendrait une dalle deux fois trop épaisse pour sa taille. Comme l'œil reste à
+distance fixe de l'écran, la fuite reste *proportionnellement* la même à tous les
+zooms — un bloc au bord montre toujours autant de tranche par rapport à
+lui-même — et la perspective, elle, ne bouge jamais.
+
+**Un doigt dans le vide coupe, deux déplacent et zooment.** C'est sans ambiguïté,
+parce qu'un glisser de bloc exige d'avoir *attrapé* un bloc : deux doigts dans le
+vide ne peuvent être que la navigation. Le second doigt annule donc la coupe que
+le premier avait commencée. Le point du monde qui était sous le milieu des deux
+doigts y reste pendant tout le geste, sans quoi l'image fuit sous la main dès
+qu'on pince.
+
+**Le monde défile tout seul quand le doigt approche d'un bord pendant un
+glisser.** Ce n'est pas un supplément de confort : on tire un cube de la barre et
+on le pose d'un seul geste, et si sa place est hors champ, il faudrait cadrer
+d'abord et poser ensuite. Le doigt ne bouge pas mais le monde sous lui, si : le
+bloc est donc recalé sur la contrée qu'on vient de découvrir.
+
+**On ne jette plus dans le sol : on rend le cube à la barre.** Dès qu'on peut
+cadrer une tour, une trappe creusée dans le sol devient injoignable — et une
+suppression qu'on ne peut pas atteindre est pire que pas de suppression du tout.
+La barre est fixée à l'écran, donc toujours à portée quel que soit le cadrage, et
+elle n'occupe **aucune case du monde** : c'est l'objection exacte qui avait fait
+descendre la corbeille sous le sol. En prime, c'est la symétrie du geste de
+pose — on tire de la barre, on rend à la barre.
+
+**Le cadrage se range avec le chantier.** On quitte un jeu en plein milieu d'une
+tour ; retrouver la vue d'ensemble à la place du détail sur lequel on travaillait,
+c'est perdre le fil, d'autant que le monde fait trois écrans. Un chantier vide
+garde donc quand même sa caméra. Et le cube se pose en haut de **ce qu'on
+regarde**, pas en haut du monde : tomber du plafond d'un monde de trois écrans le
+ferait atterrir hors de vue.
 
 ## Architecture
 

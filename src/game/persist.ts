@@ -50,6 +50,12 @@ export interface SavedPiece {
 export interface SavedBuild {
   w: number;
   blocks: SavedPiece[];
+  /**
+   * Le cadrage. On quitte un jeu en plein milieu d'une tour : retrouver la vue
+   * d'ensemble à la place du détail sur lequel on travaillait, c'est perdre le
+   * fil — d'autant que le monde fait trois écrans.
+   */
+  cam?: { x: number; y: number; k: number };
 }
 
 /**
@@ -213,7 +219,13 @@ export function loadBuild(spaceId: string): SavedBuild | null {
         })),
     }))
     .filter((b) => b.cells.length > 0);
-  return blocks.length ? { w: data.w, blocks } : null;
+  const c = data.cam;
+  const cam =
+    c && entier(c.x) && entier(c.y) && entier(c.k) && c.k > 0
+      ? { x: c.x, y: c.y, k: c.k }
+      : undefined;
+  // Un chantier vide garde quand même son cadrage : on revient où on était.
+  return blocks.length || cam ? { w: data.w, blocks, cam } : null;
 }
 
 export function saveBuild(spaceId: string, build: SavedBuild) {

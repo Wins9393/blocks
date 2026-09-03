@@ -9,6 +9,7 @@ import {
   FALLBACK_WIDTH,
   FIXED_DT,
   MAX_SUBSTEPS,
+  MAX_CUBES,
   MAX_UNITS,
   MAX_VALUE,
   MERGE_GAP,
@@ -21,6 +22,16 @@ import type { Cell } from '../core/shape';
 import { rotateCell, weld } from '../core/build';
 import { CHENE, matiereFor, newSkin } from '../core/matieres';
 import type { Skin } from '../core/matieres';
+import {
+  MONDE,
+  SOL_Y,
+  cameraDepart,
+  cameraIdentite,
+  centreVue,
+  clampCamera,
+  toWorld,
+} from '../core/camera';
+import type { Camera, Vue } from '../core/camera';
 import * as sfx from '../audio/sfx';
 import { ShakeDetector, partitionByCut, segmentHitsBox, sliceFromPath } from '../input/gestures';
 import type { Cut, Sample } from '../input/gestures';
@@ -42,6 +53,8 @@ export interface GameState {
   units: number;
   canUndo: boolean;
   full: boolean;
+  /** Cubes que la scène accepte encore : la barre s'en sert pour se griser. */
+  plafond: number;
   /** Valeurs des blocs présents : c'est là-dessus que les missions statuent. */
   values: number[];
 }
@@ -60,6 +73,10 @@ interface Drag {
   oy: number;
   px: number;
   py: number;
+  /** Dernière position **à l'écran** : c'est elle qui décide du défilement au
+   *  bord et du retour à la barre, tous deux fixés à l'écran. */
+  ex: number;
+  ey: number;
   dirX: number;
   dirY: number;
   travelled: number;
@@ -71,6 +88,16 @@ interface Slice {
   path: Sample[];
 }
 
+/**
+ * Un doigt qui navigue. Deux dans le vide déplacent et zooment ; un seul coupe.
+ * C'est sans ambiguïté, parce qu'un glisser de bloc exige d'avoir attrapé un
+ * bloc : deux doigts dans le vide ne peuvent être que la navigation.
+ */
+interface Nav {
+  x: number;
+  y: number;
+}
+
 const UNDO_DEPTH = 40;
 
 export class Game {
@@ -79,6 +106,16 @@ export class Game {
   private visuals = new Map<number, Visual>();
   private drags = new Map<number, Drag>();
   private slices = new Map<number, Slice>();
+  private navs = new Map<number, Nav>();
+  /** L'état de la caméra au début du geste à deux doigts. */
+  private navDepart: { cam: Camera; centre: Nav; ecart: number } | null = null;
+  /**
+   * La caméra du chantier, gardée d'un redimensionnement à l'autre et rangée
+   * avec la scène. Nulle tant qu'on n'y est pas allé.
+   */
+  private camChantier: Camera | null = null;
+  private camera: Camera = { x: 0, y: 0, k: 1 };
+  private vue: Vue = { w: FALLBACK_WIDTH, h: FALLBACK_HEIGHT, inset: BOTTOM_SAFE };
   private particles: Particle[] = [];
   private undoStack: Snapshot[] = [];
   private trashGulp = 0;
@@ -106,6 +143,11 @@ export class Game {
   /** Sur un chantier, on ne compte plus : ni valeur, ni visage, ni voix. */
   private get chantier(): boolean {
     return this.kind === 'chantier';
+  }
+
+  /** Le plafond de cubes : plus haut sur un chantier, où le monde est plus grand. */
+  private get plafond(): number {
+    return this.chantier ? MAX_CUBES : MAX_UNITS;
   }
 
   /** La couleur d'un bloc : sa matière sur un chantier, son nombre sinon. */
@@ -163,7 +205,8 @@ export class Game {
       blocks: this.world.blocks.size,
       units: this.world.totalUnits,
       canUndo: this.undoStack.length > 0,
-      full: this.world.totalUnits >= MAX_UNITS,
+      full: this.world.totalUnits >= this.plafond,
+      plafond: this.plafond,
       values: [...this.world.blocks.values()].map((b) => b.value),
     };
   }
@@ -185,13 +228,40 @@ export class Game {
       // reste sans sol ni murs et tout tombe dans le vide.
       if (this.world.width > 0) return;
       this.renderer.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT);
-      this.world.resize(FALLBACK_WIDTH, FALLBACK_HEIGHT, margeBas(FALLBACK_WIDTH));
+      this.poseLeMonde(FALLBACK_WIDTH, FALLBACK_HEIGHT);
       return;
     }
 
     this.renderer.resize(w, h);
-    this.world.resize(w, h, margeBas(w));
+    this.poseLeMonde(w, h);
   };
+
+  /**
+   * Les bornes du monde et la caméra, selon le mode.
+   *
+   * Au mode nombre, le monde est l'écran et la caméra vise son centre à
+   * l'échelle 1 : `toScreen` y est rigoureusement l'identité, et rien de ce qui
+   * a été mesuré au pixel ne bouge. Sur un chantier, le monde est un rectangle
+   * fixe et la caméra s'y promène.
+   */
+  private poseLeMonde(w: number, h: number) {
+    this.vue = { w, h, inset: margeBas(w) };
+    if (this.chantier) {
+      this.world.resize(MONDE.w, MONDE.h, SOL_Y);
+      this.camChantier = clampCamera(this.camChantier ?? cameraDepart(this.vue), this.vue);
+      this.camera = this.camChantier;
+    } else {
+      this.world.resize(w, h, h - this.vue.inset);
+      this.camera = cameraIdentite(this.vue);
+    }
+  }
+
+  /** Bouger la caméra passe toujours par ici : elle reste dans les bornes. */
+  private cadre(cam: Camera) {
+    this.camera = clampCamera(cam, this.vue);
+    if (this.chantier) this.camChantier = this.camera;
+    this.dirty = true;
+  }
 
   private onVisibility = () => {
     if (document.visibilityState !== 'hidden') return;
@@ -207,6 +277,8 @@ export class Game {
     for (const drag of this.drags.values()) this.releaseDrag(drag);
     this.drags.clear();
     this.slices.clear();
+    this.navs.clear();
+    this.navDepart = null;
     this.pointer = null;
   };
 
@@ -215,7 +287,7 @@ export class Game {
   /** Pose un bloc de la valeur demandée, tombé du haut de l'écran. */
   spawn(value: number) {
     const v = Math.min(MAX_VALUE, Math.max(1, Math.round(value)));
-    if (this.world.totalUnits + v > MAX_UNITS) {
+    if (this.world.totalUnits + v > this.plafond) {
       sfx.playRefuse();
       return;
     }
@@ -234,16 +306,26 @@ export class Game {
 
   /** Pose un cube de la matière demandée. Sur un chantier, tout part de là. */
   poseCube(mat: number = CHENE) {
-    if (this.world.totalUnits + 1 > MAX_UNITS) {
+    if (this.world.totalUnits + 1 > this.plafond) {
       sfx.playRefuse();
       return;
     }
     this.snapshot();
-    const x = this.world.width * 0.5 + (Math.random() - 0.5) * Math.min(220, this.world.width * 0.5);
+    // Le cube naît en haut de **ce qu'on regarde**, pas en haut du monde : sur
+    // un chantier de trois écrans, tomber du plafond du monde le ferait
+    // atterrir hors de vue, et il faudrait partir à sa recherche.
+    const haut = toWorld(this.camera, this.vue, { x: 0, y: 0 });
+    const droite = toWorld(this.camera, this.vue, { x: this.vue.w, y: 0 });
+    const marge = Math.min(UNIT * 2, (droite.x - haut.x) * 0.3);
+    const x = clamp(
+      haut.x + marge + Math.random() * Math.max(1, droite.x - haut.x - marge * 2),
+      UNIT,
+      this.world.width - UNIT,
+    );
     const block = this.world.add(
       shapeFor(1),
       x,
-      40 + UNIT / 2,
+      Math.max(UNIT, haut.y + UNIT),
       (Math.random() - 0.5) * 0.6,
       { x: (Math.random() - 0.5) * 3, y: 2 },
       undefined,
@@ -375,6 +457,8 @@ export class Game {
     // Même vide : charger, c'est aussi vider la scène précédente.
     if (this.chantier) {
       const saved = loadBuild(this.spaceId);
+      this.camChantier = saved?.cam ? clampCamera(saved.cam, this.vue) : cameraDepart(this.vue);
+      this.camera = this.camChantier;
       this.loadBuild(saved?.blocks ?? [], saved?.w);
     } else {
       const saved = loadScene(this.spaceId);
@@ -425,8 +509,12 @@ export class Game {
     this.flush();
     this.spaceId = id;
     this.kind = kind;
+    this.camChantier = null;
     this.undoStack.length = 0;
     this.particles.length = 0;
+    // Les bornes du monde changent avec le mode : on les repose avant de
+    // relire, sinon un chantier atterrirait dans le monde des nombres.
+    this.poseLeMonde(this.vue.w, this.vue.h);
     this.restore();
   }
 
@@ -436,7 +524,12 @@ export class Game {
   }
 
   private flush = () => {
-    if (this.chantier) saveBuild(this.spaceId, { w: this.world.width, blocks: this.serializeBuild() });
+    if (this.chantier)
+      saveBuild(this.spaceId, {
+        w: this.world.width,
+        blocks: this.serializeBuild(),
+        cam: this.camChantier ?? undefined,
+      });
     else saveScene(this.spaceId, { w: this.world.width, blocks: this.serialize() });
     this.dirty = false;
   };
@@ -464,10 +557,22 @@ export class Game {
 
   // --- pointeur ---------------------------------------------------------
 
-  private toLocal(e: PointerEvent) {
+  /** Position à l'écran, en pixels CSS depuis le coin du canvas. */
+  private toEcran(e: PointerEvent) {
     const rect = this.canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
+
+  /**
+   * Position dans le monde. C'est l'unique endroit où l'écran devient du
+   * monde : au mode nombre la caméra est l'identité, et cette fonction rend
+   * exactement ce que rendait `clientX - rect.left`.
+   */
+  private toLocal(e: PointerEvent) {
+    return toWorld(this.camera, this.vue, this.toEcran(e));
+  }
+
+
 
   private onPointerDown = (e: PointerEvent) => {
     e.preventDefault();
@@ -485,12 +590,15 @@ export class Game {
       this.world.wake(block);
       const shake = new ShakeDetector();
       shake.reset({ x: p.x, y: p.y, t: e.timeStamp });
+      const ecran = this.toEcran(e);
       this.drags.set(e.pointerId, {
         blockId: block.id,
         ox: block.body.position.x - p.x,
         oy: block.body.position.y - p.y,
         px: p.x,
         py: p.y,
+        ex: ecran.x,
+        ey: ecran.y,
         dirX: 0,
         dirY: -1,
         travelled: 0,
@@ -498,10 +606,51 @@ export class Game {
         candidate: null,
       });
     } else {
-      // Doigt posé dans le vide : c'est peut-être le début d'une coupe.
-      this.slices.set(e.pointerId, { path: [{ x: p.x, y: p.y, t: e.timeStamp }] });
+      // Doigt posé dans le vide : c'est peut-être le début d'une coupe. Mais un
+      // **second** doigt dans le vide la remplace par la navigation — deux
+      // doigts ne peuvent être que ça, puisqu'un glisser exige d'avoir attrapé
+      // un bloc. Le second doigt annule donc la coupe que le premier avait
+      // commencée.
+      this.navs.set(e.pointerId, this.toEcran(e));
+      if (this.chantier && this.navs.size >= 2) {
+        this.slices.clear();
+        this.demarreNav();
+      } else {
+        this.slices.set(e.pointerId, { path: [{ x: p.x, y: p.y, t: e.timeStamp }] });
+      }
     }
   };
+
+  private demarreNav() {
+    const doigts = [...this.navs.values()];
+    if (doigts.length < 2) {
+      this.navDepart = null;
+      return;
+    }
+    const [a, b] = doigts;
+    this.navDepart = {
+      cam: { ...this.camera },
+      centre: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      ecart: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+    };
+  }
+
+  /**
+   * Déplacement et zoom d'un seul geste : le point du monde qui était sous le
+   * milieu des deux doigts y reste. Sans cette ancre, l'image fuit sous la main
+   * dès qu'on pince.
+   */
+  private bougeLaCamera() {
+    const d = this.navDepart;
+    const doigts = [...this.navs.values()];
+    if (!d || doigts.length < 2) return;
+    const [a, b] = doigts;
+    const centre = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const k = (d.cam.k * Math.max(1, Math.hypot(a.x - b.x, a.y - b.y))) / d.ecart;
+    const sous = toWorld(d.cam, this.vue, d.centre);
+    const c = centreVue(this.vue);
+    this.cadre({ x: sous.x - (centre.x - c.x) / k, y: sous.y - (centre.y - c.y) / k, k });
+  }
 
   private onPointerMove = (e: PointerEvent) => {
     const p = this.toLocal(e);
@@ -518,8 +667,22 @@ export class Game {
       }
       drag.px = p.x;
       drag.py = p.y;
+      const ecran = this.toEcran(e);
+      drag.ex = ecran.x;
+      drag.ey = ecran.y;
       if (drag.shake.push({ x: p.x, y: p.y, t: e.timeStamp })) this.peel(drag);
       return;
+    }
+
+    const nav = this.navs.get(e.pointerId);
+    if (nav) {
+      const ecran = this.toEcran(e);
+      nav.x = ecran.x;
+      nav.y = ecran.y;
+      if (this.navDepart) {
+        this.bougeLaCamera();
+        return;
+      }
     }
 
     const slice = this.slices.get(e.pointerId);
@@ -542,6 +705,8 @@ export class Game {
       const cut = sliceFromPath(slice.path);
       if (cut) this.applyCut(cut);
     }
+
+    if (this.navs.delete(e.pointerId) && this.navs.size < 2) this.navDepart = null;
 
     if (this.drags.size === 0 && this.slices.size === 0) this.pointer = null;
   };
@@ -598,7 +763,17 @@ export class Game {
     const block = this.world.blocks.get(drag.blockId);
     if (!block) return;
 
-    if (this.world.isOverTrash({ x: drag.px, y: drag.py })) {
+    // Sur un chantier on ne jette pas dans le sol : on **rend le cube à la
+    // barre**, d'où il vient. La cible est fixée à l'écran, donc toujours
+    // atteignable quel que soit le cadrage, et elle n'occupe aucune case du
+    // monde — l'objection exacte qui avait fait descendre la corbeille sous le
+    // sol. Avec une caméra, une trappe creusée dans le sol devient injoignable
+    // dès qu'on cadre une tour, et une suppression qu'on ne peut pas atteindre
+    // est pire que pas de suppression du tout.
+    const jete = this.chantier
+      ? drag.ey > this.vue.h - this.vue.inset
+      : this.world.isOverTrash({ x: drag.px, y: drag.py });
+    if (jete) {
       this.trash(block);
       return;
     }
@@ -1021,6 +1196,43 @@ export class Game {
 
   // --- impacts ----------------------------------------------------------
 
+  /**
+   * Le monde défile quand le doigt approche d'un bord pendant un glisser.
+   *
+   * Sans lui, poser un cube dont la place est hors champ redemanderait de
+   * cadrer d'abord et de poser ensuite : le geste unique de la barre à la
+   * scène ne survivrait pas à un monde plus grand que l'écran.
+   */
+  private defileAuBord(dt: number) {
+    if (!this.chantier || this.navDepart || this.drags.size === 0) return;
+    const MARGE = 64;
+    const VITESSE = 0.5;
+    const utile = this.vue.h - this.vue.inset;
+    const pousse = (v: number, taille: number) => {
+      if (v < MARGE) return -(MARGE - v) / MARGE;
+      if (v > taille - MARGE) return (v - (taille - MARGE)) / MARGE;
+      return 0;
+    };
+
+    let dx = 0;
+    let dy = 0;
+    for (const drag of this.drags.values()) {
+      dx += pousse(drag.ex, this.vue.w);
+      dy += pousse(drag.ey, utile);
+    }
+    if (dx === 0 && dy === 0) return;
+
+    const pas = (VITESSE * dt) / this.camera.k;
+    this.cadre({ ...this.camera, x: this.camera.x + dx * pas, y: this.camera.y + dy * pas });
+    // Le doigt n'a pas bougé, mais le monde sous lui, si : le bloc doit suivre
+    // la contrée qu'on vient de découvrir.
+    for (const drag of this.drags.values()) {
+      const p = toWorld(this.camera, this.vue, { x: drag.ex, y: drag.ey });
+      drag.px = p.x;
+      drag.py = p.y;
+    }
+  }
+
   private onCollision = (event: Matter.IEventCollision<Matter.Engine>) => {
     let sounds = 0;
     for (const pair of event.pairs) {
@@ -1065,13 +1277,14 @@ export class Game {
     }
     if (this.acc > FIXED_DT * MAX_SUBSTEPS) this.acc = 0;
 
+    this.defileAuBord(dt);
     this.updateCandidates();
     this.updateVisuals(dt);
     this.stepParticles(dt);
     this.trashGulp = Math.max(0, this.trashGulp - dt / 260);
 
     // Elle apparaît dès qu'un bloc est tenu, et repart dès qu'on lâche.
-    const visible = this.drags.size > 0 || this.trashGulp > 0;
+    const visible = !this.chantier && (this.drags.size > 0 || this.trashGulp > 0);
     this.trashShow = clamp(this.trashShow + (visible ? dt / 130 : -dt / 190), 0, 1);
     const survolee = [...this.drags.values()].some((d) =>
       this.world.isOverTrash({ x: d.px, y: d.py }),
@@ -1188,6 +1401,8 @@ export class Game {
         show: this.trashShow,
       },
       groundY: this.world.groundY,
+      camera: this.camera,
+      vue: this.vue,
       width: this.world.width,
       height: this.world.height,
       pointer: this.pointer,

@@ -97,10 +97,15 @@ export class World {
     return shape.w * UNIT + 4 <= this.width;
   }
 
-  resize(width: number, height: number, bottomInset: number) {
+  /**
+   * Les bornes du monde. Au mode nombre, le monde *est* l'écran et `groundY`
+   * remonte de la hauteur de la barre. Sur un chantier, c'est un rectangle fixe
+   * qui ne dépend pas de l'écran, et le sol est tout en bas.
+   */
+  resize(width: number, height: number, groundY: number) {
     this.width = width;
     this.height = height;
-    this.groundY = height - bottomInset;
+    this.groundY = groundY;
 
     Composite.remove(this.engine.world, this.walls);
 

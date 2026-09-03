@@ -4,6 +4,8 @@ import { colorFor, parseHex, rgba, shade } from '../core/palette';
 import { shapeFor } from '../core/shape';
 import type { Shape } from '../core/shape';
 import type { Skin } from '../core/matieres';
+import { centreVue, toScreen } from '../core/camera';
+import type { Camera, Vue } from '../core/camera';
 import type { Sample } from '../input/gestures';
 import type { Wardrobe } from '../core/wardrobe';
 import { DecorCache, drawCharacter } from './faces';
@@ -77,6 +79,13 @@ export interface Scene {
   groundY: number;
   width: number;
   height: number;
+  /**
+   * La caméra, et la taille de l'écran. Tout ce qui vit dans le monde passe par
+   * elle ; le ciel et l'image du relief, eux, sont déjà en pixels d'écran. Au
+   * mode nombre elle est l'identité, et rien de ce qui a été mesuré ne bouge.
+   */
+  camera: Camera;
+  vue: Vue;
   pointer: { x: number; y: number } | null;
   time: number;
 }
@@ -113,6 +122,9 @@ export class Renderer {
     sky: CanvasGradient;
     vignette: CanvasGradient;
     glow: CanvasGradient;
+  } | null = null;
+  private sol: {
+    key: string;
     slab: CanvasGradient;
     contact: CanvasGradient;
   } | null = null;
@@ -140,6 +152,21 @@ export class Renderer {
     this.relief.resize(width, height, this.dpr);
   }
 
+  /** Le repère du monde, vu par la caméra. Au mode nombre, c'est l'identité. */
+  private applique(scene: Scene) {
+    const { ctx } = this;
+    const c = centreVue(scene.vue);
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.scale(scene.camera.k, scene.camera.k);
+    ctx.translate(-scene.camera.x, -scene.camera.y);
+  }
+
+  /** Un y du monde, ramené à l'écran : le ciel se dégrade jusqu'au sol. */
+  private ecranY(scene: Scene, y: number): number {
+    return (y - scene.camera.y) * scene.camera.k + centreVue(scene.vue).y;
+  }
+
   draw(scene: Scene) {
     const { ctx } = this;
     ctx.save();
@@ -147,15 +174,19 @@ export class Renderer {
 
     this.drawSky(scene);
     this.drawVignette(scene);
+
+    this.applique(scene);
     this.drawGround(scene);
     for (const b of scene.blocks) this.drawShadow(b, scene.groundY);
     this.drawTrashBack(scene);
+    ctx.restore();
 
     // La pose est calculée une seule fois : elle contient un tremblement
     // tiré au hasard, et le visage doit rester collé à son corps.
     const poses = scene.blocks.map((b) => this.pose2D(b, scene));
     this.drawBlocs(scene, poses);
 
+    this.applique(scene);
     this.drawTrashFront(scene);
     // Les pastilles passent après tous les blocs : sinon, dans un tas, le
     // chiffre d'un bloc disparaît derrière celui dessiné juste après.
@@ -163,6 +194,7 @@ export class Renderer {
     if (scene.ghost) this.drawGhost(scene.ghost);
     this.drawParticles(scene.particles);
     if (scene.slice) this.drawSlice(scene.slice);
+    ctx.restore();
 
     ctx.restore();
   }
@@ -208,6 +240,16 @@ export class Renderer {
     glow.addColorStop(0.55, 'rgba(126, 158, 220, 0.07)');
     glow.addColorStop(1, 'rgba(126, 158, 220, 0)');
 
+    this.decor = { key, sky, vignette, glow };
+    return this.decor;
+  }
+
+  /** Le sol, lui, vit dans le monde : il défile avec le chantier. */
+  private solPaints(width: number, height: number, groundY: number) {
+    const key = `${Math.round(width)}x${Math.round(height)}x${Math.round(groundY)}`;
+    if (this.sol?.key === key) return this.sol;
+    const { ctx } = this;
+
     const slab = ctx.createLinearGradient(0, groundY, 0, groundY + GROUND_HEIGHT + 30);
     slab.addColorStop(0, '#3b4762');
     slab.addColorStop(0.28, '#333e56');
@@ -217,14 +259,21 @@ export class Renderer {
     contact.addColorStop(0, 'rgba(9, 12, 20, 0)');
     contact.addColorStop(1, 'rgba(9, 12, 20, 0.3)');
 
-    this.decor = { key, sky, vignette, glow, slab, contact };
-    return this.decor;
+    this.sol = { key, slab, contact };
+    return this.sol;
   }
 
+  /**
+   * Le ciel se peint **à l'écran**, pas dans le monde : c'est le fond, il ne
+   * défile pas avec le chantier. Seule la ligne d'horizon suit la caméra, et
+   * elle est arrondie pour que les dégradés ne se refassent pas à chaque pixel
+   * de déplacement.
+   */
   private drawSky(scene: Scene) {
     const { ctx } = this;
-    const { width, height } = scene;
-    const { sky, glow } = this.decorPaints(width, height, scene.groundY);
+    const { w: width, h: height } = scene.vue;
+    const sol = Math.round(this.ecranY(scene, scene.groundY) / 8) * 8;
+    const { sky, glow } = this.decorPaints(width, height, sol);
 
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, width, height);
@@ -235,8 +284,9 @@ export class Renderer {
 
     // Trame de points, plus dense et plus claire près du sol.
     const step = UNIT;
-    for (let y = step / 2; y < scene.groundY; y += step) {
-      const fade = 0.016 + 0.032 * Math.max(0, 1 - (scene.groundY - y) / (scene.groundY || 1));
+    const bas = Math.min(height, sol);
+    for (let y = step / 2; y < bas; y += step) {
+      const fade = 0.016 + 0.032 * Math.max(0, 1 - (sol - y) / (sol || 1));
       ctx.fillStyle = `rgba(190, 210, 255, ${fade.toFixed(3)})`;
       for (let x = step / 2; x < width; x += step) {
         ctx.fillRect(x, y, 1.6, 1.6);
@@ -245,14 +295,16 @@ export class Renderer {
   }
 
   private drawVignette(scene: Scene) {
-    const { vignette } = this.decorPaints(scene.width, scene.height, scene.groundY);
+    const { w, h } = scene.vue;
+    const sol = Math.round(this.ecranY(scene, scene.groundY) / 8) * 8;
+    const { vignette } = this.decorPaints(w, h, sol);
     this.ctx.fillStyle = vignette;
-    this.ctx.fillRect(0, 0, scene.width, scene.height);
+    this.ctx.fillRect(0, 0, w, h);
   }
 
   private drawGround({ width, groundY, height }: Scene) {
     const { ctx } = this;
-    const { slab, contact } = this.decorPaints(width, height, groundY);
+    const { slab, contact } = this.solPaints(width, height, groundY);
 
     // Ombre de contact : les blocs semblent poser sur quelque chose.
     ctx.fillStyle = contact;
@@ -260,7 +312,9 @@ export class Renderer {
 
     ctx.fillStyle = slab;
     ctx.beginPath();
-    ctx.roundRect(-24, groundY, width + 48, height - groundY + 40, 16);
+    // La dalle descend bien au-delà du monde : dézoomé à fond, le chantier se
+    // centre dans la vue, et sans ce débord on verrait du ciel sous le sol.
+    ctx.roundRect(-24, groundY, width + 48, Math.max(0, height - groundY) + 600, 16);
     ctx.fill();
 
     // Joints de dalle : donne une matière au sol sans attirer l'oeil.
@@ -373,18 +427,31 @@ export class Renderer {
     const { ctx, relief } = this;
     if (!relief.disponible) return;
 
+    // Le relief travaille en pixels d'écran : la pose, elle, est dans le monde.
+    // C'est ici qu'on passe de l'un à l'autre, et le zoom s'applique **aussi à
+    // la profondeur** — sans quoi les blocs garderaient leur épaisseur en
+    // rapetissant, et deviendraient des dalles dès qu'on dézoome.
+    const z = scene.camera.k;
+    const ecran = (p: Pose2D) => {
+      const e = toScreen(scene.camera, scene.vue, { x: p.px, y: p.py });
+      return { x: e.x, y: e.y, sx: p.sx * z, sy: p.sy * z };
+    };
+
     // Le visage au trait se peint sur la face avant du volume, plus proche de
     // l'œil que le plan du bloc : il reçoit donc la même homothétie que cette
     // face, sans quoi il glisserait du corps dès qu'un bloc quitte le centre.
-    const k = relief.avantPlan;
-    const cx = scene.width / 2;
-    const cy = scene.height / 2;
-    const avant = (p: Pose2D) => ({
-      x: cx + (p.px - cx) * k,
-      y: cy + (p.py - cy) * k,
-      sx: p.sx * k,
-      sy: p.sy * k,
-    });
+    const k = relief.avantPlanPour(z);
+    const cx = scene.vue.w / 2;
+    const cy = scene.vue.h / 2;
+    const avant = (p: Pose2D) => {
+      const e = ecran(p);
+      return {
+        x: cx + (e.x - cx) * k,
+        y: cy + (e.y - cy) * k,
+        sx: e.sx * k,
+        sy: e.sy * k,
+      };
+    };
 
     for (const p of poses) if (p.dragged && p.sx > 0.01) this.drawHalo(p, avant(p));
 
@@ -392,23 +459,25 @@ export class Renderer {
     scene.blocks.forEach((b, i) => {
       const p = poses[i];
       if (p.sx <= 0.01) return;
+      const e = ecran(p);
       blocs.push({
         value: b.value,
         cle: b.cle,
         shape: b.shape,
         skin: b.skin,
-        x: p.px,
-        y: p.py,
+        x: e.x,
+        y: e.y,
         angle: p.angle,
-        sx: p.sx,
-        sy: p.sy,
+        sx: e.sx,
+        sy: e.sy,
+        sz: z,
         rang: i,
         dragged: p.dragged,
       });
     });
 
     const corps = relief.passeCorps(blocs, scene.time);
-    if (corps) ctx.drawImage(corps, 0, 0, scene.width, scene.height);
+    if (corps) ctx.drawImage(corps, 0, 0, scene.vue.w, scene.vue.h);
 
     scene.blocks.forEach((b, i) => {
       const p = poses[i];
@@ -436,7 +505,7 @@ export class Renderer {
     });
 
     const objets = relief.passeObjets(blocs, scene.time);
-    if (objets) ctx.drawImage(objets, 0, 0, scene.width, scene.height);
+    if (objets) ctx.drawImage(objets, 0, 0, scene.vue.w, scene.vue.h);
   }
 
   /** Regard et paupières, dans le repère du bloc. */

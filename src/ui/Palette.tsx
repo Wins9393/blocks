@@ -1,4 +1,3 @@
-import { MAX_UNITS } from '../core/constants';
 import { MATIERES } from '../core/matieres';
 import type { GameState } from '../game/game';
 import type { Wardrobe } from '../core/wardrobe';
@@ -25,7 +24,7 @@ export default function Palette({ state, wardrobe, allowed, matieres, onPick }: 
           <MatiereChip
             key={mat}
             mat={mat}
-            disabled={state.units + 1 > MAX_UNITS}
+            disabled={state.units + 1 > state.plafond}
             onPick={onPick}
           />
         ))}
@@ -47,7 +46,7 @@ export default function Palette({ state, wardrobe, allowed, matieres, onPick }: 
           wardrobe={wardrobe}
           // Un bloc de 10 est refusé bien avant un bloc de 1 : chaque bouton
           // sait s'il tient encore dans la scène.
-          disabled={state.units + v > MAX_UNITS}
+          disabled={state.units + v > state.plafond}
           onPick={onPick}
         />
       ))}

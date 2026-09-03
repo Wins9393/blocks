@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MAX_UNITS } from './core/constants';
 import { Game } from './game/game';
 import type { GameState } from './game/game';
 import { playWin, say, setSound } from './audio/sfx';
@@ -41,6 +42,7 @@ export default function App() {
     units: 0,
     canUndo: false,
     full: false,
+    plafond: MAX_UNITS,
     values: [],
   });
   const [prefs, setPrefs] = useState(loadPrefs);

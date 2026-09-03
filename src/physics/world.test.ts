@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { rightingSpin } from './world';
-import { DRAG_MAX_SPIN } from '../core/constants';
+import { World, rightingSpin } from './world';
+import { DRAG_MAX_SPIN, MAX_CUBES, UNIT } from '../core/constants';
+import { MONDE, MONDE_H, MONDE_W, SOL_Y } from '../core/camera';
+import { shapeFor, shapeOf } from '../core/shape';
 
 const TOUR = Math.PI * 2;
 
@@ -34,5 +36,51 @@ describe('rightingSpin', () => {
     for (let i = 0; i < 400; i++) angle += rightingSpin(angle);
     const reste = Math.atan2(Math.sin(angle), Math.cos(angle));
     expect(Math.abs(reste)).toBeLessThan(0.01);
+  });
+});
+
+describe('les bornes du monde', () => {
+  const ligne = (n: number) => shapeOf(Array.from({ length: n }, (_, x) => ({ x, y: 0 })));
+
+  it('refuse ce qui ne tient pas entre les murs', () => {
+    // Un bloc plus large que le monde y resterait coincé, et le solveur
+    // finirait par l'éjecter.
+    const w = new World();
+    w.resize(MONDE.w, MONDE.h, SOL_Y);
+    // Quatre pixels de marge : une forme qui remplit le monde bord à bord se
+    // coincerait entre les murs.
+    expect(w.fits(ligne(MONDE_W - 1))).toBe(true);
+    expect(w.fits(ligne(MONDE_W + 1))).toBe(false);
+  });
+
+  it('laisse de la place pour manœuvrer au plafond de cubes', () => {
+    // 400 cubes dans 40 x 24 cases, c'est 42 % du chantier : le reste est l'air
+    // qu'il faut pour poser, glisser et couper.
+    expect(MAX_CUBES).toBeLessThan(MONDE_W * MONDE_H * 0.5);
+  });
+
+  it('garde le monde des nombres tel qu il était', () => {
+    // Le mode nombre n'a pas de caméra : son monde est l'écran, et le sol
+    // remonte de la hauteur de la barre.
+    const w = new World();
+    w.resize(320, 700, 700 - 178);
+    expect(w.width).toBe(320);
+    expect(w.groundY).toBe(522);
+    // Sur le plus étroit des téléphones, les formes de dix cubes de large
+    // restent hors d'atteinte — c'est la règle d'avant, inchangée.
+    expect(w.fits(shapeFor(100))).toBe(false);
+    expect(w.fits(shapeFor(4))).toBe(true);
+  });
+
+  it('accepte sur un chantier ce que l écran refusait', () => {
+    // Sur un téléphone, les formes de dix cubes de large étaient hors
+    // d'atteinte. Le chantier, lui, fait quarante cases.
+    const ecran = new World();
+    ecran.resize(320, 700, 522);
+    const chantier = new World();
+    chantier.resize(MONDE.w, MONDE.h, SOL_Y);
+    expect(ecran.fits(shapeFor(100))).toBe(false);
+    expect(chantier.fits(shapeFor(100))).toBe(true);
+    expect(320 / UNIT).toBeLessThan(MONDE_W);
   });
 });
