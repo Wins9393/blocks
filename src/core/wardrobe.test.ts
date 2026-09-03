@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_VALUE } from './constants';
-import { SLOTS, cleanWardrobe, lookFor } from './wardrobe';
+import { NU, SLOTS, cleanWardrobe, lookFor } from './wardrobe';
 import type { ResolvedLook, Wardrobe } from './wardrobe';
 
 const signature = (l: ResolvedLook) => SLOTS.map((s) => l[s.key]).join('/');
@@ -68,5 +68,21 @@ describe('cleanWardrobe', () => {
     expect(cleanWardrobe(null)).toEqual({});
     expect(cleanWardrobe('bonjour')).toEqual({});
     expect(cleanWardrobe([1, 2])).toEqual({});
+  });
+});
+
+describe('la tenue de personne', () => {
+  it('ne porte rien de ce qui se pose sur un bloc', () => {
+    // Un bloc de chantier est de la matière : sa `value` n'y est qu'un nombre
+    // de cubes, et un mur de dix se retrouvait coiffé du chapeau du 10.
+    for (const slot of ['hair', 'hat', 'glasses', 'stache', 'cheeks', 'scarf'] as const) {
+      expect(NU[slot]).toBe('rien');
+    }
+  });
+
+  it('se distingue de la tenue d’un nombre', () => {
+    // Si le 10 cessait de porter quelque chose, le test d'au-dessus passerait
+    // sans plus rien dire.
+    expect(lookFor(10).hat).not.toBe('rien');
   });
 });

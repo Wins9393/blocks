@@ -26,7 +26,7 @@ import { centeredOf } from '../core/shape';
 import type { Shape } from '../core/shape';
 import { matiereFor } from '../core/matieres';
 import type { Skin } from '../core/matieres';
-import { lookFor } from '../core/wardrobe';
+import { NU, lookFor } from '../core/wardrobe';
 import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { Forge, MAT_MAT, teinte } from './mesh';
 import type { Maille, Vec3 } from './mesh';
@@ -540,6 +540,18 @@ export class Relief {
   }
 
   /**
+   * Ce qu'un bloc porte.
+   *
+   * Un bloc fait de matière ne porte rien : sur un chantier il n'y a personne
+   * à habiller, et sa `value` n'est que son nombre de cubes — la demander à
+   * `lookFor` posait la couronne du 10 sur un mur de dix cubes.
+   */
+  private tenue(b: BlocRelief): ResolvedLook {
+    if (b.look) return b.look;
+    return b.skin?.length ? NU : lookFor(b.value, this.wardrobe);
+  }
+
+  /**
    * Passe arrière : les corps, plus ce qui se porte *sous* le visage — la cape
    * et tout ce qui entoure le cou. L'ordre reprend celui du dessin 2D.
    */
@@ -553,7 +565,7 @@ export class Relief {
     for (const b of blocs) {
       const { modele, normale, biais } = this.repere(b);
       this.dessine(this.bloc(b), modele, normale, biais);
-      const look = b.look ?? lookFor(b.value, this.wardrobe);
+      const look = this.tenue(b);
       const tete = this.tete(b, modele);
       if (look.scarf !== 'rien') {
         this.dessine(this.piece('scarf', look.scarf, 'corps'), tete, normale, biais);
@@ -580,7 +592,7 @@ export class Relief {
     for (const b of blocs) {
       const { modele, normale, biais } = this.repere(b);
       const tete = this.tete(b, modele);
-      const look = b.look ?? lookFor(b.value, this.wardrobe);
+      const look = this.tenue(b);
       for (const slot of ['hat', 'glasses'] as const) {
         const id = look[slot];
         if (id === 'rien') continue;

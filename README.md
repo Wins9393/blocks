@@ -435,10 +435,29 @@ ses indices plutôt qu'avec ses points.
 
 | Geste | Effet |
 | --- | --- |
-| Appuyer sur une **matière** | un cube de cette matière tombe dans la scène |
+| **Tirer** une matière hors de la barre | le cube naît sous le doigt et se pose où on le lâche |
 | Glisser un bloc contre un autre, puis lâcher | il se soude, aimanté sur la grille de sa cible |
 | Tenir un bloc et le **secouer** | détache le cube que le doigt tient |
 | Tracer un **trait franc** | coupe, et chaque morceau connexe devient un bloc |
+
+**Le cube ne tombe pas du ciel : on le tire de la barre.** Il naît sous le doigt
+au moment où celui-ci se pose sur la matière, et il suit la main jusqu'à sa
+place. Un cube lâché du haut atterrit où il veut, et sur un chantier de sept
+écrans, souvent hors de vue — il faudrait partir à sa recherche. Le lâcher sans
+être sorti de la barre l'y range, ce qui n'est pas une exception mais la règle
+du rangement appliquée telle quelle : la barre *est* la corbeille du chantier.
+Rien n'ayant alors été créé, rien n'est à annuler non plus — un cube tiré puis
+rendu ne laisse pas une entrée muette dans la pile.
+
+Deux conséquences ont dû être réglées. Le doigt est encore *dans la barre*, qui
+recouvre la bande de sol : né là, le cube naîtrait **sous** le sol et le solveur
+ne l'en sortirait plus. Il naît donc à la place que le glisser lui donnerait
+déjà — il sort de la barre du même mouvement, sans saut. Et le défilement au
+bord ne s'arme qu'une fois le doigt entré franchement dans le cadre : le premier
+bouton est à 46 px du bord gauche, dans la bande qui déclenche le défilement, et
+le monde se serait mis à filer avant que l'enfant ait bougé d'un millimètre.
+Attraper un bloc déjà collé au bord obéit désormais à la même règle — il faut
+s'en éloigner une fois pour que le retour au bord veuille dire quelque chose.
 
 **La règle de fusion n'a pas bougé d'une ligne** : `MERGE_MIN_TRAVEL` de trajet,
 un candidat à moins de `MERGE_GAP`, et un lâcher. Le contact passif ne soude
@@ -453,6 +472,23 @@ cherche la place la plus proche qui tienne. L'assemblage garde l'inclinaison de
 la cible, et **la cible ne bouge pas d'un pixel** : le corps est replacé pour que
 sa première case retombe exactement où elle était. Voir sa maison se recentrer à
 chaque brique serait insupportable.
+
+**L'aperçu montre une place, plus une addition.** Sur un chantier, l'ancien
+aperçu annonçait `4 + 1 = 5` et dessinait la forme canonique du 5 : ni le compte
+ni la forme n'étaient vrais, puisque la soudure allait poser un cube contre un
+mur. On montre donc la seule chose qui le soit — les cases du bloc tiré, à
+l'endroit et dans l'inclinaison où elles vont se coller, en trait clair et non
+en matière pleine : ce n'est pas encore posé. Le battement lent dit qu'il attend
+le lâcher.
+
+Ce que l'aperçu annonce et ce que le lâcher fait sortent **du même calcul** : une
+seule fonction cherche la place, appelée deux fois. C'est la seule garantie qui
+tienne — deux calculs jumeaux finiraient par diverger, et un aperçu qui ment est
+pire que pas d'aperçu. La conversion de la grille vers le monde est en revanche
+testée contre la formule du dessin (`caseEnMonde`), pour que la place montrée
+soit celle où le cube se dessinera.
+
+Le mode nombre, lui, garde son addition : c'est tout son propos.
 
 **La soudure se fait par l'arête, jamais par le coin.** Deux conditions et pas
 une de plus : aucune case sur une case prise, et au moins une arête partagée. Si
@@ -478,6 +514,14 @@ dernier geste, et une brique mal posée se voit trois briques plus tard. Sans
 lui, il faudrait couper la maison en deux pour la corriger.
 
 ### Ce que le rendu a dû apprendre
+
+**Un bloc de matière ne porte rien.** Le visage et la pastille du nombre étaient
+déjà retirés du chantier, mais les chapeaux, lunettes et écharpes se choisissent
+dans la passe en volume, à partir de la `value` du bloc — laquelle n'est plus,
+sur un chantier, que son nombre de cubes. Un mur de dix briques se coiffait donc
+de la couronne du 10, et un escalier de cinq du chapeau étoile. Une tenue vide
+(`NU`) répond désormais pour tout bloc qui a une matière ; `lookFor` ne répond
+plus que pour les nombres.
 
 La silhouette et la maille étaient mises en cache **par valeur** ; elles le sont
 maintenant par signature de cases — deux assemblages de même compte n'ont pas la
@@ -657,3 +701,6 @@ couleurs propres, personnages dessinés pour ce projet, nom original.
 - Un sixième chapitre : il faudra d'abord dessiner les pièces qui vont avec.
 - Multiplication par rectangles (la forme canonique s'y prête déjà).
 - Soudure telle quelle + geste « ranger » qui claque la forme canonique.
+- L'aide de première ouverture du chantier, avec son propre drapeau : les six
+  gestes y sont assez différents pour ne pas se déduire de ceux des nombres.
+- Le verre : le laisser fumé, ou le passer au modèle des gemmes (voir plus haut).

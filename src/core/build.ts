@@ -84,3 +84,36 @@ export function weld(
   }
   return null;
 }
+
+/** Un point du monde, en pixels. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/**
+ * Position monde du centre d'une case exprimée dans la **grille d'un bloc**.
+ *
+ * Un bloc a deux repères. Celui de ses cases, entier, où la soudure travaille ;
+ * et celui de son corps, qui tourne autour de son centre de masse et où le
+ * dessin travaille. La première case fait le pont : on connaît sa coordonnée
+ * entière (`cells[0]`) et son décalage au centre de masse (`centre[0]`), et
+ * tout le reste s'en déduit.
+ *
+ * C'est ce qui permet de montrer une place avant de l'occuper : la case (3, 0)
+ * d'un mur n'existe pas encore, mais on sait exactement où elle tomberait.
+ */
+export function caseEnMonde(
+  cells: Cell[],
+  centre: Cell[],
+  corps: Point,
+  angle: number,
+  unit: number,
+  c: Cell,
+): Point {
+  const lx = (c.x - cells[0].x + centre[0].x) * unit;
+  const ly = (c.y - cells[0].y + centre[0].y) * unit;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return { x: corps.x + lx * cos - ly * sin, y: corps.y + lx * sin + ly * cos };
+}

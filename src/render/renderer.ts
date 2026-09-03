@@ -60,10 +60,24 @@ export interface Ghost {
   ok: boolean;
 }
 
+/**
+ * La place qu'un bloc tiré va prendre, en monde.
+ *
+ * Pas de valeur, pas de somme : sur un chantier il n'y a rien à annoncer, il y
+ * a un endroit à montrer. Les cases sont déjà celles que la soudure posera.
+ */
+export interface Apercu {
+  /** Centre de chaque cube, en monde. */
+  cubes: Array<{ x: number; y: number }>;
+  /** L'inclinaison de la cible, que l'assemblage gardera. */
+  angle: number;
+}
+
 export interface Scene {
   blocks: BlockVisual[];
   particles: Particle[];
   ghost: Ghost | null;
+  apercu: Apercu | null;
   slice: Sample[] | null;
   trash: {
     x: number;
@@ -192,6 +206,7 @@ export class Renderer {
     // chiffre d'un bloc disparaît derrière celui dessiné juste après.
     for (const b of scene.blocks) this.drawBadge(b);
     if (scene.ghost) this.drawGhost(scene.ghost);
+    if (scene.apercu) this.drawApercu(scene.apercu, scene.time);
     this.drawParticles(scene.particles);
     if (scene.slice) this.drawSlice(scene.slice);
     ctx.restore();
@@ -656,6 +671,38 @@ export class Renderer {
     ctx.strokeText(text, 0, ty);
     ctx.fillStyle = ghost.ok ? '#ffffff' : '#ff9c9c';
     ctx.fillText(text, 0, ty);
+    ctx.restore();
+  }
+
+  /**
+   * La place à venir, dessinée case par case.
+   *
+   * Un trait clair, pas un cube plein : ce n'est pas encore de la matière, et
+   * un cube opaque posé là ferait croire que c'est fait. Le battement lent dit
+   * qu'il attend le lâcher.
+   */
+  private drawApercu(apercu: Apercu, time: number) {
+    const { ctx } = this;
+    if (!apercu.cubes.length) return;
+    const bat = 0.78 + 0.22 * Math.sin(time / 220);
+    const cote = UNIT - 4;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = `rgba(226, 240, 255, ${(0.92 * bat).toFixed(3)})`;
+    ctx.fillStyle = `rgba(226, 240, 255, ${(0.16 * bat).toFixed(3)})`;
+    ctx.shadowColor = 'rgba(150, 205, 255, 0.55)';
+    ctx.shadowBlur = 12;
+    for (const c of apercu.cubes) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(apercu.angle);
+      ctx.beginPath();
+      ctx.roundRect(-cote / 2, -cote / 2, cote, cote, CORNER * 0.8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.restore();
   }
 

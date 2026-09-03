@@ -19,7 +19,7 @@ import {
 import { colorFor } from '../core/palette';
 import { centeredOf, connectedParts, shapeFor, shapeOf } from '../core/shape';
 import type { Cell } from '../core/shape';
-import { rotateCell, weld } from '../core/build';
+import { caseEnMonde, rotateCell, weld } from '../core/build';
 import { CHENE, matiereFor, newSkin } from '../core/matieres';
 import type { Skin } from '../core/matieres';
 import {
@@ -39,7 +39,7 @@ import { World, minPartGap, rightingSpin } from '../physics/world';
 import type { Block } from '../physics/world';
 import type { Wardrobe } from '../core/wardrobe';
 import { Renderer } from '../render/renderer';
-import type { BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
+import type { Apercu, BlockVisual, Ghost, Particle, Scene } from '../render/renderer';
 import { loadBuild, loadScene, saveBuild, saveScene } from './persist';
 import type { SavedBlock, SavedPiece, SceneKind } from './persist';
 
@@ -82,6 +82,26 @@ interface Drag {
   travelled: number;
   shake: ShakeDetector;
   candidate: number | null;
+  /**
+   * Le défilement au bord attend que le doigt soit entré franchement dans le
+   * cadre.
+   *
+   * Un cube tiré de la barre naît *dans* la bande du bas, et souvent dans celle
+   * d'un côté — le premier bouton est à 46 px du bord. Sans cet armement, le
+   * monde se mettrait à filer avant que l'enfant ait bougé d'un millimètre.
+   * Attraper un bloc déjà collé au bord obéit désormais à la même règle : il
+   * faut s'en éloigner une fois pour que le retour au bord veuille dire
+   * quelque chose.
+   */
+  bordArme: boolean;
+  /**
+   * L'état d'avant, pour un cube né sous le doigt dans la barre.
+   *
+   * Il n'entre dans la pile d'annulation qu'au moment où le cube est gardé :
+   * un cube tiré puis rendu à la barre n'a rien changé, et laisser deux
+   * entrées derrière lui rendrait « annuler » muet deux fois de suite.
+   */
+  avant: Snapshot | null;
 }
 
 interface Slice {
@@ -304,30 +324,85 @@ export class Game {
     this.emit();
   }
 
-  /** Pose un cube de la matière demandée. Sur un chantier, tout part de là. */
+  /**
+   * Fait naître un cube **sous le doigt**, dans la barre, et le confie au
+   * glisser en cours. C'est le seul geste qui fabrique de la matière.
+   *
+   * Il ne tombe pas du ciel : un cube lâché du haut atterrit où il veut, et sur
+   * un chantier plus grand que l'écran, souvent hors de vue. Ici, l'enfant le
+   * tire de la barre jusqu'à l'endroit exact où il le pose — et s'il le relâche
+   * sans être sorti de la barre, le cube y retourne, ce qui est déjà la règle
+   * du rangement (rien n'a été créé, rien n'est à annuler).
+   */
+  prendreDansLaBarre(mat: number, pointerId: number, clientX: number, clientY: number): boolean {
+    // Le premier geste de la partie peut être celui-ci : sans ça, le son de
+    // pose serait le seul à ne jamais réveiller la carte audio.
+    sfx.unlockAudio();
+    if (this.world.totalUnits + 1 > this.plafond) {
+      sfx.playRefuse();
+      return false;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    const ecran = { x: clientX - rect.left, y: clientY - rect.top };
+    const p = toWorld(this.camera, this.vue, ecran);
+
+    // L'état d'avant est mis de côté, pas empilé : voir `Drag.avant`.
+    const avant = this.etat();
+    // Le doigt est encore *dans la barre*, qui recouvre la bande de sol : né
+    // là, le cube naîtrait sous le sol, et le solveur ne l'en sortirait plus.
+    // On le fait donc naître à la place que le glisser lui donnerait — il sort
+    // de la barre du même mouvement, sans saut.
+    const ou = this.tenable(p.x, p.y);
+    const block = this.world.add(shapeFor(1), ou.x, ou.y, 0, { x: 0, y: 0 }, undefined, [
+      newSkin(mat),
+    ]);
+    this.track(block);
+
+    const shake = new ShakeDetector();
+    shake.reset({ x: p.x, y: p.y, t: performance.now() });
+    this.drags.set(pointerId, {
+      blockId: block.id,
+      // Le cube est pris par son centre : il est né là, il n'a pas d'ailleurs.
+      ox: 0,
+      oy: 0,
+      px: p.x,
+      py: p.y,
+      ex: ecran.x,
+      ey: ecran.y,
+      dirX: 0,
+      dirY: -1,
+      travelled: 0,
+      shake,
+      candidate: null,
+      bordArme: false,
+      avant,
+    });
+
+    sfx.playPose(matiereFor(mat));
+    this.dirty = true;
+    this.emit();
+    return true;
+  }
+
+  /**
+   * Pose un cube au milieu de ce qu'on regarde.
+   *
+   * Chemin de secours du clavier : la barre se tire au doigt, mais un bouton
+   * qu'on ne peut qu'activer ne doit pas rester mort.
+   */
   poseCube(mat: number = CHENE) {
     if (this.world.totalUnits + 1 > this.plafond) {
       sfx.playRefuse();
       return;
     }
     this.snapshot();
-    // Le cube naît en haut de **ce qu'on regarde**, pas en haut du monde : sur
-    // un chantier de trois écrans, tomber du plafond du monde le ferait
-    // atterrir hors de vue, et il faudrait partir à sa recherche.
-    const haut = toWorld(this.camera, this.vue, { x: 0, y: 0 });
-    const droite = toWorld(this.camera, this.vue, { x: this.vue.w, y: 0 });
-    const marge = Math.min(UNIT * 2, (droite.x - haut.x) * 0.3);
-    const x = clamp(
-      haut.x + marge + Math.random() * Math.max(1, droite.x - haut.x - marge * 2),
-      UNIT,
-      this.world.width - UNIT,
-    );
+    const haut = toWorld(this.camera, this.vue, { x: this.vue.w / 2, y: 0 });
     const block = this.world.add(
       shapeFor(1),
-      x,
+      clamp(haut.x, UNIT, this.world.width - UNIT),
       Math.max(UNIT, haut.y + UNIT),
-      (Math.random() - 0.5) * 0.6,
-      { x: (Math.random() - 0.5) * 3, y: 2 },
+      0,
+      { x: 0, y: 1 },
       undefined,
       [newSkin(mat)],
     );
@@ -518,8 +593,17 @@ export class Game {
     this.restore();
   }
 
+  /** L'état de la table, dans la forme que l'annulation sait remettre. */
+  private etat(): Snapshot {
+    return this.chantier ? this.serializeBuild() : this.serialize();
+  }
+
   private snapshot() {
-    this.undoStack.push(this.chantier ? this.serializeBuild() : this.serialize());
+    this.empile(this.etat());
+  }
+
+  private empile(snap: Snapshot) {
+    this.undoStack.push(snap);
     if (this.undoStack.length > UNDO_DEPTH) this.undoStack.shift();
   }
 
@@ -604,6 +688,8 @@ export class Game {
         travelled: 0,
         shake,
         candidate: null,
+        bordArme: false,
+        avant: null,
       });
     } else {
       // Doigt posé dans le vide : c'est peut-être le début d'une coupe. Mais un
@@ -717,12 +803,19 @@ export class Game {
 
   // --- manipulation -----------------------------------------------------
 
+  /** Où un bloc tenu peut aller : jamais dans un mur, jamais dans le sol. */
+  private tenable(x: number, y: number) {
+    return {
+      x: clamp(x, UNIT * 0.6, this.world.width - UNIT * 0.6),
+      y: clamp(y, -240, this.world.groundY - UNIT * 0.4),
+    };
+  }
+
   private applyDrags() {
     for (const drag of this.drags.values()) {
       const block = this.world.blocks.get(drag.blockId);
       if (!block) continue;
-      const tx = clamp(drag.px + drag.ox, UNIT * 0.6, this.world.width - UNIT * 0.6);
-      const ty = clamp(drag.py + drag.oy, -240, this.world.groundY - UNIT * 0.4);
+      const { x: tx, y: ty } = this.tenable(drag.px + drag.ox, drag.py + drag.oy);
 
       let vx = (tx - block.body.position.x) * DRAG_GAIN;
       let vy = (ty - block.body.position.y) * DRAG_GAIN;
@@ -759,24 +852,46 @@ export class Game {
     return false;
   }
 
+  /**
+   * Le geste finit-il hors du jeu ?
+   *
+   * Sur un chantier on ne jette pas dans le sol : on **rend le cube à la
+   * barre**, d'où il vient. La cible est fixée à l'écran, donc toujours
+   * atteignable quel que soit le cadrage, et elle n'occupe aucune case du
+   * monde — l'objection exacte qui avait fait descendre la corbeille sous le
+   * sol. Avec une caméra, une trappe creusée dans le sol devient injoignable
+   * dès qu'on cadre une tour, et une suppression qu'on ne peut pas atteindre
+   * est pire que pas de suppression du tout.
+   */
+  private jete(drag: Drag): boolean {
+    return this.chantier
+      ? drag.ey > this.vue.h - this.vue.inset
+      : this.world.isOverTrash({ x: drag.px, y: drag.py });
+  }
+
   private releaseDrag(drag: Drag) {
     const block = this.world.blocks.get(drag.blockId);
     if (!block) return;
 
-    // Sur un chantier on ne jette pas dans le sol : on **rend le cube à la
-    // barre**, d'où il vient. La cible est fixée à l'écran, donc toujours
-    // atteignable quel que soit le cadrage, et elle n'occupe aucune case du
-    // monde — l'objection exacte qui avait fait descendre la corbeille sous le
-    // sol. Avec une caméra, une trappe creusée dans le sol devient injoignable
-    // dès qu'on cadre une tour, et une suppression qu'on ne peut pas atteindre
-    // est pire que pas de suppression du tout.
-    const jete = this.chantier
-      ? drag.ey > this.vue.h - this.vue.inset
-      : this.world.isOverTrash({ x: drag.px, y: drag.py });
-    if (jete) {
-      this.trash(block);
+    if (this.jete(drag)) {
+      // Un cube tiré de la barre et rendu à la barre n'a jamais existé : il
+      // s'en va sans le bruit de la corbeille et sans rien laisser à annuler.
+      if (drag.avant) {
+        this.world.remove(block.id);
+        this.visuals.delete(block.id);
+        this.dirty = true;
+        this.emit();
+      } else {
+        this.trash(block);
+      }
       return;
     }
+
+    // Le cube né sous le doigt est gardé : c'est ici qu'il entre dans
+    // l'histoire, et une seule annulation défait tout le geste — la naissance
+    // du cube et la soudure qui l'a suivi.
+    const neuf = drag.avant !== null;
+    if (drag.avant) this.empile(drag.avant);
 
     // Un simple tap ne fusionne pas : sans déplacement, il n'y a pas d'intention.
     const candidate =
@@ -784,7 +899,7 @@ export class Game {
         ? this.world.blocks.get(drag.candidate)
         : null;
     if (candidate) {
-      if (this.chantier) this.weldBlocks(block, candidate);
+      if (this.chantier) this.weldBlocks(block, candidate, !neuf);
       else if (this.canMerge(block.value + candidate.value)) this.merge(block, candidate);
       else sfx.playRefuse();
     }
@@ -798,16 +913,16 @@ export class Game {
   }
 
   /**
-   * Soude le bloc tiré sur le bloc cible, là où le doigt l'a amené.
+   * Où les cases du bloc tiré iraient se poser sur la cible, dans la grille de
+   * celle-ci. `null` s'il n'y a nulle part où les mettre.
    *
    * Tout se joue dans la grille de la cible : on y exprime la pose du bloc
    * tiré, on arrondit au cube près et au quart de tour, et `weld` cherche la
-   * place la plus proche qui tienne. L'assemblage garde l'inclinaison de la
-   * cible, et **la cible ne bouge pas d'un pixel** — c'est autour d'elle qu'on
-   * construit, et voir sa maison se recentrer à chaque brique serait
-   * insupportable.
+   * place la plus proche qui tienne. Le même calcul sert deux fois — à montrer
+   * la place pendant le glisser, à souder au lâcher — pour que ce qu'on voit
+   * soit exactement ce qui va se produire.
    */
-  private weldBlocks(tire: Block, cible: Block) {
+  private poseSoudee(tire: Block, cible: Block): Cell[] | null {
     const cCentered = centeredOf(cible.shape);
     const tCentered = centeredOf(tire.shape);
     const quart = Math.round((tire.body.angle - cible.body.angle) / (Math.PI / 2));
@@ -828,16 +943,28 @@ export class Game {
     };
 
     const pose = weld(cible.shape.cells, tire.shape.cells, quart, ancre);
+    if (!pose) return null;
+    return this.world.fits(shapeOf([...cible.shape.cells, ...pose])) ? pose : null;
+  }
+
+  /**
+   * Soude le bloc tiré sur le bloc cible, là où le doigt l'a amené.
+   *
+   * L'assemblage garde l'inclinaison de la cible, et **la cible ne bouge pas
+   * d'un pixel** — c'est autour d'elle qu'on construit, et voir sa maison se
+   * recentrer à chaque brique serait insupportable.
+   */
+  private weldBlocks(tire: Block, cible: Block, aNoter = true) {
+    const pose = this.poseSoudee(tire, cible);
     if (!pose) {
       sfx.playRefuse();
       return;
     }
 
+    const cCentered = centeredOf(cible.shape);
+    const cos = Math.cos(cible.body.angle);
+    const sin = Math.sin(cible.body.angle);
     const shape = shapeOf([...cible.shape.cells, ...pose]);
-    if (!this.world.fits(shape)) {
-      sfx.playRefuse();
-      return;
-    }
 
     // La cible garde sa place : on décale le corps de ce que le nouveau centre
     // de masse a bougé, pour que sa première case retombe exactement dessus.
@@ -845,7 +972,7 @@ export class Game {
     const ox = (cCentered[0].x - centered[0].x) * UNIT;
     const oy = (cCentered[0].y - centered[0].y) * UNIT;
 
-    this.snapshot();
+    if (aNoter) this.snapshot();
     const skin = [...cible.skin, ...tire.skin];
     const velocity = { x: cible.body.velocity.x, y: cible.body.velocity.y };
     const angle = cible.body.angle;
@@ -1217,8 +1344,14 @@ export class Game {
     let dx = 0;
     let dy = 0;
     for (const drag of this.drags.values()) {
-      dx += pousse(drag.ex, this.vue.w);
-      dy += pousse(drag.ey, utile);
+      const px = pousse(drag.ex, this.vue.w);
+      const py = pousse(drag.ey, utile);
+      if (!drag.bordArme) {
+        if (px === 0 && py === 0) drag.bordArme = true;
+        continue;
+      }
+      dx += px;
+      dy += py;
     }
     if (dx === 0 && dy === 0) return;
 
@@ -1306,7 +1439,10 @@ export class Game {
         drag.candidate = null;
         continue;
       }
-      if (drag.travelled <= MERGE_MIN_TRAVEL || this.world.isOverTrash({ x: drag.px, y: drag.py })) {
+      // Pas de candidat quand le geste part à la corbeille — ou, sur un
+      // chantier, quand le doigt est revenu dans la barre : ce qu'on montrerait
+      // là ne se produira pas.
+      if (drag.travelled <= MERGE_MIN_TRAVEL || this.jete(drag)) {
         drag.candidate = null;
         continue;
       }
@@ -1342,6 +1478,44 @@ export class Game {
     return ids;
   }
 
+  /**
+   * La place que le bloc tiré va prendre, montrée à l'avance.
+   *
+   * Sur un chantier, l'ancien aperçu ne voulait plus rien dire : il annonçait
+   * `4 + 1 = 5` et dessinait la forme canonique du 5, quand la soudure allait
+   * poser un cube contre un mur. Ni le compte ni la forme n'étaient vrais. On
+   * montre donc la seule chose qui le soit — les cases du bloc tiré là où
+   * elles vont se coller, calculées par le calcul même qui les y collera.
+   */
+  private apercuSoudure(): Apercu | null {
+    for (const drag of this.drags.values()) {
+      if (drag.candidate == null) continue;
+      const tire = this.world.blocks.get(drag.blockId);
+      const cible = this.world.blocks.get(drag.candidate);
+      if (!tire || !cible) continue;
+      const pose = this.poseSoudee(tire, cible);
+      if (!pose) continue;
+
+      // Les cases sont dans la grille de la cible : on les ramène dans le monde
+      // par le repère de la cible, qui ne bougera pas.
+      const centered = centeredOf(cible.shape);
+      return {
+        angle: cible.body.angle,
+        cubes: pose.map((c) =>
+          caseEnMonde(
+            cible.shape.cells,
+            centered,
+            cible.body.position,
+            cible.body.angle,
+            UNIT,
+            c,
+          ),
+        ),
+      };
+    }
+    return null;
+  }
+
   private buildScene(): Scene {
     const blocks: BlockVisual[] = [];
     for (const block of this.world.blocks.values()) {
@@ -1362,8 +1536,11 @@ export class Game {
       });
     }
 
+    // Sur un chantier, l'aperçu n'est plus une addition mais une place : voir
+    // `apercuSoudure`.
     let ghost: Ghost | null = null;
     for (const drag of this.drags.values()) {
+      if (this.chantier) break;
       const block = this.world.blocks.get(drag.blockId);
       const other = drag.candidate != null ? this.world.blocks.get(drag.candidate) : null;
       if (block && other && !ghost) {
@@ -1393,6 +1570,7 @@ export class Game {
       blocks,
       particles: this.particles,
       ghost,
+      apercu: this.chantier ? this.apercuSoudure() : null,
       slice: slicePath,
       trash: {
         ...this.world.trash,

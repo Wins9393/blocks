@@ -1,3 +1,4 @@
+import type { PointerEvent } from 'react';
 import { MATIERES } from '../core/matieres';
 import type { GameState } from '../game/game';
 import type { Wardrobe } from '../core/wardrobe';
@@ -14,9 +15,11 @@ interface Props {
   /** Sur un chantier, la barre offre des matières : elle pose toujours un cube. */
   matieres?: boolean;
   onPick: (value: number) => void;
+  /** Chantier : le doigt tire le cube hors de la barre. */
+  onTirer?: (mat: number, e: PointerEvent<HTMLButtonElement>) => void;
 }
 
-export default function Palette({ state, wardrobe, allowed, matieres, onPick }: Props) {
+export default function Palette({ state, wardrobe, allowed, matieres, onPick, onTirer }: Props) {
   if (matieres) {
     return (
       <div className={MATIERES.length < 6 ? 'palette restreinte' : 'palette'}>
@@ -25,7 +28,8 @@ export default function Palette({ state, wardrobe, allowed, matieres, onPick }: 
             key={mat}
             mat={mat}
             disabled={state.units + 1 > state.plafond}
-            onPick={onPick}
+            onTirer={onTirer ?? (() => {})}
+            onPoser={onPick}
           />
         ))}
         {state.full && <div className="warning">C&apos;est plein !</div>}

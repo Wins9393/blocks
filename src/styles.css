@@ -194,6 +194,16 @@ body,
   transition: transform 90ms ease, background 120ms ease;
 }
 
+/* Le cube se tire hors de la barre : le navigateur ne doit ni faire defiler la
+   page ni ouvrir son propre glisser sous le doigt, sans quoi il annule le
+   pointeur en cours de route et le cube reste colle au bouton. */
+.chip.tirable {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .chip:active:not(:disabled) {
   transform: scale(0.9);
   background: rgba(255, 255, 255, 0.16);

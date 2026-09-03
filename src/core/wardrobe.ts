@@ -95,6 +95,26 @@ export interface Look {
 
 export type SlotKey = keyof Look;
 
+/**
+ * La tenue de personne.
+ *
+ * Sur un chantier, un bloc n'est pas quelqu'un : c'est de la matière, et sa
+ * `value` n'y est plus qu'un nombre de cubes. Lui demander sa tenue par
+ * `lookFor` coifferait un mur de dix cubes de la couronne du 10 — ce qui
+ * arrivait, chapeaux et lunettes compris.
+ */
+export const NU: Look = {
+  eyes: 'ronds',
+  brows: 'rien',
+  mouth: 'trait',
+  hair: 'rien',
+  hat: 'rien',
+  glasses: 'rien',
+  stache: 'rien',
+  cheeks: 'rien',
+  scarf: 'rien',
+};
+
 /** Ce qu'un espace a changé, pièce par pièce, pour les blocs de 1 à 10. */
 export type Wardrobe = Record<number, Partial<Look>>;
 

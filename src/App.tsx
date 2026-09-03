@@ -369,6 +369,12 @@ export default function App() {
         onPick={(v) =>
           mode === 'construction' ? gameRef.current?.poseCube(v) : gameRef.current?.spawn(v)
         }
+        onTirer={(mat, e) => {
+          // Les `pointermove` et `pointerup` sont écoutés sur la fenêtre : une
+          // fois le glisser ouvert ici, le jeu le suit sans rien savoir de la
+          // barre d'où il vient.
+          gameRef.current?.prendreDansLaBarre(mat, e.pointerId, e.clientX, e.clientY);
+        }}
       />
 
       {hintsOpen && <Hints wardrobe={wardrobe} onClose={closeHints} />}

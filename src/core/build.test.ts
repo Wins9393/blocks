@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { placeCells, rotateCell, weld } from './build';
-import { connectedParts } from './shape';
+import { caseEnMonde, placeCells, rotateCell, weld } from './build';
+import { centeredOf, connectedParts, shapeOf } from './shape';
 import type { Cell } from './shape';
 
 const cle = (c: Cell) => `${c.x},${c.y}`;
@@ -114,5 +114,66 @@ describe('la soudure', () => {
     expect(pose).not.toBeNull();
     const xs = new Set((pose as Cell[]).map((c) => c.x));
     expect(xs.size).toBe(1);
+  });
+});
+
+describe('caseEnMonde', () => {
+  const U = 36;
+  /** Où le dessin met chaque cube d'un bloc : la formule du rendu, écrite à part. */
+  const dessin = (cells: Cell[], pos: { x: number; y: number }, angle: number) =>
+    centeredOf(shapeOf(cells)).map((o) => {
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return {
+        x: pos.x + o.x * U * cos - o.y * U * sin,
+        y: pos.y + o.x * U * sin + o.y * U * cos,
+      };
+    });
+
+  const proche = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    expect(a.x).toBeCloseTo(b.x, 6);
+    expect(a.y).toBeCloseTo(b.y, 6);
+  };
+
+  it('met les cases d’un bloc là où le dessin les met', () => {
+    // L'aperçu de soudure se pose par ce calcul, les cubes se dessinent par
+    // l'autre : s'ils divergeaient, la place montrée ne serait pas celle prise.
+    const cells = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 1, y: 1 },
+    ];
+    const shape = shapeOf(cells);
+    const centre = centeredOf(shape);
+    for (const angle of [0, 0.3, -1.2, Math.PI / 2]) {
+      const pos = { x: 205, y: 819 };
+      const attendu = dessin(cells, pos, angle);
+      shape.cells.forEach((c, i) => {
+        proche(caseEnMonde(shape.cells, centre, pos, angle, U, c), attendu[i]);
+      });
+    }
+  });
+
+  it('sait placer une case que le bloc n’occupe pas encore', () => {
+    // C'est tout l'objet de l'aperçu : la case (3, 0) d'un mur de trois n'existe
+    // pas, et il faut pourtant savoir où elle tomberait.
+    const shape = shapeOf(rect(3, 1));
+    const centre = centeredOf(shape);
+    const pos = { x: 100, y: 200 };
+    const voisine = caseEnMonde(shape.cells, centre, pos, 0, U, { x: 3, y: 0 });
+    const derniere = caseEnMonde(shape.cells, centre, pos, 0, U, { x: 2, y: 0 });
+    proche(voisine, { x: derniere.x + U, y: derniere.y });
+  });
+
+  it('tourne avec le bloc', () => {
+    // Un quart de tour sur un mur penché doit emmener la place avec lui, sinon
+    // l'aperçu s'afficherait à côté de la tour qu'on rallonge.
+    const shape = shapeOf(rect(2, 1));
+    const centre = centeredOf(shape);
+    const pos = { x: 0, y: 0 };
+    const droit = caseEnMonde(shape.cells, centre, pos, 0, U, { x: 2, y: 0 });
+    const tourne = caseEnMonde(shape.cells, centre, pos, Math.PI / 2, U, { x: 2, y: 0 });
+    proche(tourne, { x: -droit.y, y: droit.x });
   });
 });
