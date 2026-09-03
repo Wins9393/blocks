@@ -7,7 +7,7 @@ import {
   TRASH_W,
   UNIT,
 } from '../core/constants';
-import { rectanglesOf } from '../core/shape';
+import { rectanglesOf, signature } from '../core/shape';
 import type { Shape } from '../core/shape';
 import type { Skin } from '../core/matieres';
 
@@ -24,6 +24,14 @@ export interface Block {
    * mode nombre, où la couleur vient de la valeur.
    */
   skin: Skin[];
+  /**
+   * Signature de la maille : la forme, les matières et les graines. Calculée
+   * ici une fois pour toutes — la rebâtir à chaque image coûterait deux
+   * kilo-octets de chaîne par mur, soixante fois par seconde.
+   *
+   * Au mode nombre, la valeur suffit : deux blocs de 7 partagent leur maille.
+   */
+  cle: string;
   body: Matter.Body;
 }
 
@@ -123,7 +131,17 @@ export class World {
   ): Block {
     const body = buildBody(shape, x, y, angle);
     if (velocity) Body.setVelocity(body, velocity);
-    const block: Block = { id: id ?? nextId++, value: shape.cells.length, shape, skin, body };
+    const cle = skin.length
+      ? `c:${signature(shape.cells)}:${skin.map((s) => `${s.mat}.${s.seed}`).join(',')}`
+      : `n:${shape.cells.length}`;
+    const block: Block = {
+      id: id ?? nextId++,
+      value: shape.cells.length,
+      shape,
+      skin,
+      cle,
+      body,
+    };
     (body as Matter.Body & { blockId: number }).blockId = block.id;
     this.blocks.set(block.id, block);
     Composite.add(this.engine.world, body);

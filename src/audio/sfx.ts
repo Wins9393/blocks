@@ -3,6 +3,8 @@
  * clic et une PWA qui pèse quelques kilo-octets. La voix passe par l'API
  * de synthèse vocale du navigateur, en français.
  */
+import type { Timbre } from '../core/matieres';
+
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 /** Les notes, les chocs, la fanfare : tout ce qui sort du synthétiseur. */
@@ -136,10 +138,53 @@ export function playRefuse() {
   tone({ freq: 180, duration: 0.14, type: 'square', gain: 0.12, delay: 0.09 });
 }
 
-export function playImpact(strength: number) {
+/**
+ * Ce qu'il faut savoir d'une matière pour la faire sonner. Sur un chantier, le
+ * son suit la matière : si le chêne et le verre font le même bruit, la matière
+ * n'est plus qu'une peau — et c'est elle qui a remplacé le personnage.
+ */
+export interface Choc {
+  ton: number;
+  timbre: Timbre;
+  souffle: number;
+}
+
+/** Poser un cube : un coup sec, coloré par ce dont il est fait. */
+export function playPose(m: Choc) {
+  tone({
+    freq: m.ton,
+    duration: 0.09 + m.souffle * 0.05,
+    type: m.timbre,
+    gain: 0.2 * (1 - m.souffle * 0.45),
+  });
+  if (m.souffle > 0.08) noise(0.12 * m.souffle, 0.05 + m.souffle * 0.09, 300 + m.ton * 1.4);
+}
+
+/** Souder : deux notes, la seconde une quinte au-dessus. */
+export function playSoudure(m: Choc) {
+  const g = 1 - m.souffle * 0.4;
+  tone({ freq: m.ton * 0.75, duration: 0.08, type: m.timbre, gain: 0.16 * g });
+  tone({ freq: m.ton * 1.5, duration: 0.2, type: m.timbre, gain: 0.2 * g, delay: 0.07 });
+  if (m.souffle > 0.08) noise(0.1 * m.souffle, 0.08, 400 + m.ton);
+}
+
+export function playImpact(strength: number, m?: Choc) {
   const s = Math.min(1, strength / 14);
   if (s < 0.12) return;
-  noise(0.09 + s * 0.06, 0.06 + s * 0.2, 300 + s * 900);
+  if (!m) {
+    noise(0.09 + s * 0.06, 0.06 + s * 0.2, 300 + s * 900);
+    return;
+  }
+  // Le souffle fait tout le partage : la terre étouffe, le verre tinte.
+  noise(0.07 * (0.4 + m.souffle) + s * 0.05, 0.05 + s * 0.16, 260 + m.ton * (0.6 + s));
+  if (m.souffle < 0.55) {
+    tone({
+      freq: m.ton * (1 + s * 0.15),
+      duration: 0.06 + s * 0.05,
+      type: m.timbre,
+      gain: 0.04 + s * 0.08,
+    });
+  }
 }
 
 /** Dit le nombre à voix haute, en français, sans spammer. */

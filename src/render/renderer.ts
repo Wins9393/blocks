@@ -19,6 +19,8 @@ const FONT = "ui-rounded, 'SF Pro Rounded', 'Segoe UI Rounded', system-ui, -appl
 export interface BlockVisual {
   id: number;
   value: number;
+  /** Signature de la maille, calculée à la naissance du bloc. */
+  cle: string;
   shape: Shape;
   /** Matière de chaque cube, sur un chantier. Vide au mode nombre. */
   skin: Skin[];
@@ -392,6 +394,7 @@ export class Renderer {
       if (p.sx <= 0.01) return;
       blocs.push({
         value: b.value,
+        cle: b.cle,
         shape: b.shape,
         skin: b.skin,
         x: p.px,

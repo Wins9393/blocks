@@ -250,7 +250,7 @@ export class Game {
       [newSkin(mat)],
     );
     this.track(block);
-    sfx.playSpawn(1);
+    sfx.playPose(matiereFor(mat));
     this.dirty = true;
     this.emit();
   }
@@ -684,7 +684,8 @@ export class Game {
 
     const merged = this.world.add(shape, x, y, angle, velocity, undefined, skin);
     this.track(merged);
-    sfx.playMerge(Math.min(MAX_VALUE, merged.value));
+    // Le son est celui du cube qu'on vient de poser, pas du mur qui le reçoit.
+    sfx.playSoudure(matiereFor(tire.skin[0]?.mat ?? CHENE));
     this.dirty = true;
     this.emit();
   }
@@ -1035,7 +1036,10 @@ export class Game {
         v.squash = Math.max(v.squash, strength * 0.9);
       }
       if (sounds < 3) {
-        sfx.playImpact(relative);
+        // Sur un chantier, c'est la matière qui donne au choc sa couleur.
+        const id = (a as Matter.Body & { blockId?: number }).blockId;
+        const skin = id == null ? undefined : this.world.blocks.get(id)?.skin;
+        sfx.playImpact(relative, skin?.length ? matiereFor(skin[0].mat) : undefined);
         sounds++;
       }
     }
@@ -1132,6 +1136,7 @@ export class Game {
       blocks.push({
         id: block.id,
         value: block.value,
+        cle: block.cle,
         shape: block.shape,
         skin: block.skin,
         body: block.body,

@@ -493,9 +493,71 @@ ceux qu'on ne redessine plus.
 Ni visage ni pastille sur un chantier : c'est la matière qui dit ce qu'on
 regarde, et un personnage y ferait revenir le nombre par la fenêtre.
 
-**Ce qui n'y est pas encore.** Il n'y a qu'une matière, sans grain, et le monde
-s'arrête toujours au bord de l'écran. Les dix matières puis la caméra viennent
-ensuite.
+### Les dix matières
+
+| | Matière | Modèle | Grain |
+| --- | --- | --- | --- |
+| 1 | Chêne | mat | veines claires |
+| 2 | Noyer | mat | veines sombres |
+| 3 | Pierre | mat | moucheture |
+| 4 | Brique | mat | rangées et mortier |
+| 5 | Herbe | mat | grain fin |
+| 6 | Acier | métal | brossé |
+| 7 | Or | métal | aucun |
+| 8 | Verre | verre | aucun |
+| 9 | Néon | lumière | aucun |
+| 10 | Cristal | gemme | facettes |
+
+Dix, ce qui remplit la barre pile — deux rangées de cinq sur téléphone, une
+seule au-delà de 880 px. **Tout est visible d'un coup d'œil** : au-delà de dix,
+la barre pagine, et un enfant de quatre ans ne cherche pas dans une liste qui
+défile. Chaque bouton montre un cube dessiné par le moteur de la scène, grain
+compris — avec une graine fixée par la matière, sinon le bouton changerait de
+veinage à chaque image.
+
+**Chaque matière porte sa couleur, et il n'y a pas d'axe de teinte par-dessus.**
+Du bois bleu ferait du grain un bruit posé sur un aplat, et la matière cesserait
+de se reconnaître. Les variantes sont des entrées de plus — chêne *et* noyer —
+pas une case à croiser. Un test tient la règle : deux matières ne partagent
+jamais ni nom ni couleur, les cinq modèles d'éclairage sont tous représentés, et
+**toute matière mate a un grain**, sans quoi cinq aplats bruns et gris
+rejoueraient exactement le problème que le retrait de `colorFor` avait résolu.
+
+**Le grain est calculé, pas dessiné.** Rien à télécharger : la PWA garde son
+« zéro asset ». Deux attributs de plus par sommet — la position dans le repère
+du **cube** et le couple (grain, graine) — et une fonction de nuanceur par
+famille. Le repère du cube est ce qui accroche la veine à sa case : calé sur le
+bloc, le grain glisserait d'un cran chaque fois qu'une soudure déplace le centre
+de masse, et tout un mur sauterait au moment précis où l'enfant regarde la
+brique qu'il vient de poser.
+
+Aucune puissance dans ces fonctions : la norme GLSL ES laisse `pow()` indéfinie
+sur une base nulle, et un seul NaN suffit à noircir le pixel. Le bruit de poche
+garde de petites constantes, parce qu'un sinus nourri de grands nombres ne rend
+plus du hasard mais des bandes dès qu'on tombe en demi-précision.
+
+**La clé de la maille est calculée à la naissance du bloc** (`world.add`), pas à
+chaque image : elle dit la forme, les matières *et* les graines, et un mur de
+deux cents cubes ferait sinon deux kilo-octets de chaîne soixante fois par
+seconde.
+
+**Le son suit la matière.** Chaque matière a sa hauteur, son timbre et sa part
+de souffle : l'herbe étouffe à 150 Hz, le cristal tinte à 1500. Pose, soudure et
+choc en prennent la couleur. Si le chêne et le verre font le même bruit, la
+matière n'est plus qu'une peau — or c'est elle qui a remplacé le personnage.
+
+**Un aveu sur le verre.** Le modèle du verre a été réglé pour des verres de
+lunettes posés sur un visage : transparent de face, couvrant de biais, et
+d'autant plus opaque qu'il est sombre. Un *cube* plein de cette matière, sur une
+scène au fond sombre, n'a rien derrière lui à laisser voir — il se lit donc
+comme un bloc de verre fumé plutôt que comme du verre clair. Sa teinte a été
+descendue pour lui rendre du corps. Relever le plancher d'opacité du modèle
+réglerait mieux la question, mais rendrait du même coup les lunettes de vue plus
+opaques dans le mode nombre : ce n'est pas un réglage qui se change d'un côté
+seulement.
+
+**Ce qui n'y est pas encore.** Le monde s'arrête toujours au bord de l'écran.
+La caméra vient ensuite.
 
 ## Architecture
 

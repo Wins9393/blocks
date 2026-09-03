@@ -15,6 +15,14 @@ export interface Maille {
   col: Float32Array;
   /** 0 mat · 1 métal · 2 verre · 3 lumière · 4 gemme */
   mat: Float32Array;
+  /**
+   * Position dans le repère du **cube**, pas du bloc. C'est ce qui fait tenir
+   * le grain à sa case : calé sur le bloc, il glisserait d'un cran chaque fois
+   * qu'une brique soudée déplace le centre de masse.
+   */
+  local: Float32Array;
+  /** Deux nombres par sommet : le grain, et la graine figée à la naissance. */
+  grain: Float32Array;
   nb: number;
 }
 
@@ -540,13 +548,26 @@ export class Forge {
     return this.P.length === 0;
   }
 
+  /** Sommets déjà émis : de quoi savoir quelle tranche appartient à quel cube. */
+  get nbSommets(): number {
+    return this.P.length / 3;
+  }
+
+  /**
+   * Le repère local vaut la position, et le grain est nul : c'est ce qu'il faut
+   * pour tout ce qui n'en a pas — les pièces de la garde-robe. `mailleBloc`
+   * les réécrit cube par cube.
+   */
   fini(): Maille {
+    const nb = this.P.length / 3;
     return {
       pos: new Float32Array(this.P),
       nor: new Float32Array(this.N),
       col: new Float32Array(this.C),
       mat: new Float32Array(this.M),
-      nb: this.P.length / 3,
+      local: new Float32Array(this.P),
+      grain: new Float32Array(nb * 2),
+      nb,
     };
   }
 }

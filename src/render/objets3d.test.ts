@@ -124,6 +124,49 @@ function maille(v: number) {
   );
 }
 
+describe('le grain des matières', () => {
+  it('tient au cube, pas au bloc', () => {
+    // C'est l'invariant de Q13 : le repère du grain est celui du cube. Calé
+    // sur le bloc, la veine glisserait d'un cran chaque fois qu'une soudure
+    // déplace le centre de masse — un saut visible sur tout un mur.
+    const shape = shapeFor(4);
+    const m = mailleBloc(
+      shape,
+      shape.cells.map(() => [0.5, 0.5, 0.5] as [number, number, number]),
+      shape.cells.map(() => 0),
+      shape.cells.map(() => 1),
+      shape.cells.map((_, i) => i / 4),
+    );
+    let posMax = 0;
+    let localMax = 0;
+    for (let i = 0; i < m.nb; i++) {
+      posMax = Math.max(posMax, Math.abs(m.pos[i * 3]), Math.abs(m.pos[i * 3 + 1]));
+      localMax = Math.max(localMax, Math.abs(m.local[i * 3]), Math.abs(m.local[i * 3 + 1]));
+    }
+    // Le bloc s'étend sur deux cubes, chaque cube sur un seul.
+    expect(posMax).toBeGreaterThan(UNIT * 0.9);
+    expect(localMax).toBeLessThanOrEqual(UNIT / 2 + 0.001);
+  });
+
+  it('donne à chaque cube son grain et sa graine', () => {
+    const shape = shapeFor(4);
+    const m = mailleBloc(
+      shape,
+      shape.cells.map(() => [0.5, 0.5, 0.5] as [number, number, number]),
+      shape.cells.map(() => 0),
+      shape.cells.map(() => 3),
+      shape.cells.map((_, i) => (i + 1) / 8),
+    );
+    const graines = new Set<number>();
+    for (let i = 0; i < m.nb; i++) {
+      expect(m.grain[i * 2]).toBe(3);
+      graines.add(m.grain[i * 2 + 1]);
+    }
+    // Quatre cubes, quatre veinages : sinon le mur devient un damier.
+    expect(graines.size).toBe(4);
+  });
+});
+
 describe('les blocs en volume', () => {
   it('tient debout pour toutes les valeurs', () => {
     for (let v = 1; v <= MAX_VALUE; v++) verifie(maille(v), `bloc ${v}`);

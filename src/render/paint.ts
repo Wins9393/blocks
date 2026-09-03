@@ -1,5 +1,7 @@
 import { UNIT } from '../core/constants';
 import { shapeFor } from '../core/shape';
+import { matiereFor } from '../core/matieres';
+import type { Skin } from '../core/matieres';
 import type { ResolvedLook, Wardrobe } from '../core/wardrobe';
 import { drawCharacter, drawHead } from './faces';
 import { Relief } from './relief';
@@ -119,6 +121,7 @@ function vignetteRelief(
   tete: (ctx: CanvasRenderingContext2D) => void,
   look?: ResolvedLook,
   wardrobe?: Wardrobe,
+  skin?: Skin[],
 ) {
   const relief = reliefVignette();
   if (!relief) return;
@@ -129,7 +132,9 @@ function vignetteRelief(
 
   const bloc = {
     value,
+    cle: skin?.length ? `v:${skin.map((k) => `${k.mat}.${k.seed}`).join(',')}` : `n:${value}`,
     shape: shapeFor(value),
+    skin,
     x,
     y,
     angle: 0,
@@ -183,6 +188,25 @@ export function drawBlockThumb(
     undefined,
     wardrobe,
   );
+}
+
+/**
+ * Un cube de la matière demandée, dessiné par le moteur de la scène : le bouton
+ * montre exactement ce qu'il pose, grain compris.
+ *
+ * La graine est fixée par la matière et non tirée au sort : un bouton qui
+ * change de veinage à chaque image ne serait plus un bouton.
+ */
+export function drawCubeThumb(
+  ctx: CanvasRenderingContext2D,
+  mat: number,
+  boxW: number,
+  boxH: number,
+  dpr: number,
+) {
+  vignetteRelief(ctx, 1, matiereFor(mat).couleur, boxW, boxH, dpr, () => {}, undefined, undefined, [
+    { mat, seed: (mat * 6151) % 65536 },
+  ]);
 }
 
 /**

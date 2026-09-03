@@ -22,7 +22,7 @@
  */
 import { UNIT } from '../core/constants';
 import { colorFor } from '../core/palette';
-import { centeredOf, signature } from '../core/shape';
+import { centeredOf } from '../core/shape';
 import type { Shape } from '../core/shape';
 import { matiereFor } from '../core/matieres';
 import type { Skin } from '../core/matieres';
@@ -38,6 +38,8 @@ attribute vec3 aPos;
 attribute vec3 aNor;
 attribute vec3 aCol;
 attribute float aMat;
+attribute vec3 aLocal;
+attribute vec2 aGrain;
 uniform mat4 uProj;
 uniform mat4 uModele;
 uniform mat4 uNormale;
@@ -46,12 +48,16 @@ varying vec3 vN;
 varying vec3 vP;
 varying vec3 vCol;
 varying float vMat;
+varying vec3 vLocal;
+varying vec2 vGrain;
 void main() {
   vec4 monde = uModele * vec4(aPos, 1.0);
   vN = mat3(uNormale) * aNor;
   vP = monde.xyz;
   vCol = aCol;
   vMat = aMat;
+  vLocal = aLocal;
+  vGrain = aGrain;
   gl_Position = uProj * monde;
   // Le rang de dessin ne se traduit pas en recul — il fausserait la taille
   // sous une perspective — mais en simple décalage de profondeur.
@@ -86,6 +92,8 @@ varying vec3 vN;
 varying vec3 vP;
 varying vec3 vCol;
 varying float vMat;
+varying vec3 vLocal;
+varying vec2 vGrain;
 uniform vec3 uOeil;
 /** Une puissance dont la base ne peut ni s'annuler ni dépasser un. */
 float serre(float cosinus, float durete) {
@@ -100,6 +108,62 @@ vec3 ciel(vec3 d) {
   float lampe = serre(dot(d, normalize(vec3(-0.5, -0.76, 0.42))), 24.0);
   return c + vec3(1.0, 0.93, 0.74) * lampe * 1.6;
 }
+/**
+ * Un bruit de poche. Les constantes restent petites à dessein : sur un
+ * téléphone en demi-précision, un sinus nourri de grands nombres ne rend plus
+ * du hasard mais des bandes.
+ */
+float bruit(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 4375.85);
+}
+
+/**
+ * Le grain, rendu comme un facteur autour de 1 : la matière garde sa couleur,
+ * le grain ne fait que la moduler. Aucune puissance ici — la norme laisse
+ * pow() indéfinie sur une base nulle, et un seul NaN suffit à noircir le pixel.
+ *
+ * q est en pixels, dans le repère du cube : un cube fait 36 de côté, donc q va
+ * de -18 à 18. C'est ce qui accroche le grain à sa case.
+ */
+float grain(float type, float graine, vec3 q) {
+  float phase = graine * 6.2831;
+  if (type < 0.5) return 1.0;
+  if (type < 1.5) {
+    // Bois : des veines le long du cube, ondulées pour n'être jamais droites.
+    float t = q.x * 0.055 + sin(q.y * 0.07 + phase) * 0.55 + graine;
+    float v = fract(t);
+    float veine = smoothstep(0.0, 0.30, v) * smoothstep(1.0, 0.70, v);
+    return mix(0.84, 1.07, veine);
+  }
+  if (type < 2.5) {
+    // Pierre : une moucheture par petits carreaux, plutôt qu'un bruit fin qui
+    // scintille dès que le bloc bouge.
+    float n = bruit(floor(q.xy * 0.42) + graine * 37.0);
+    return mix(0.80, 1.14, n);
+  }
+  if (type < 3.5) {
+    // Brique : des rangées décalées d'une demi-brique, et le mortier clair.
+    float rang = floor((q.y + 18.0) / 9.0);
+    float bx = fract((q.x + 18.0 + mod(rang, 2.0) * 9.0) / 18.0);
+    float by = fract((q.y + 18.0) / 9.0);
+    float dedans = smoothstep(0.0, 0.10, bx) * smoothstep(1.0, 0.90, bx)
+                 * smoothstep(0.0, 0.20, by) * smoothstep(1.0, 0.80, by);
+    float teinte = bruit(vec2(rang, floor((q.x + mod(rang, 2.0) * 9.0) / 18.0)) + graine);
+    return mix(1.34, mix(0.92, 1.06, teinte), dedans);
+  }
+  if (type < 4.5) {
+    // Herbe, terre : un grain fin, sans motif qu'on puisse suivre des yeux.
+    return mix(0.86, 1.10, bruit(q.xy * 1.7 + graine * 53.0));
+  }
+  if (type < 5.5) {
+    // Acier brossé : des stries dans un seul sens.
+    return mix(0.88, 1.10, bruit(vec2(floor(q.y * 1.1), graine * 61.0)));
+  }
+  // Cristal : des facettes larges, plates, qui cassent la lumière par bandes.
+  float f = abs(fract(q.x * 0.06 + q.y * 0.037 + graine) - 0.5);
+  return mix(0.82, 1.18, smoothstep(0.08, 0.42, f));
+}
+
 void main() {
   vec3 N = normalize(vN);
   vec3 V = normalize(uOeil - vP);
@@ -114,6 +178,9 @@ void main() {
   float spec = serre(dot(N, H), 60.0);
   float bord = serre(1.0 - max(dot(N, V), 0.0), 3.0);
   vec3 refl = ciel(reflect(-V, N));
+  // La matière garde sa couleur, le grain ne fait que la moduler — et il tient
+  // à sa case, puisqu'il se calcule dans le repère du cube.
+  vec3 base = clamp(vCol * grain(vGrain.x, vGrain.y, vLocal), 0.0, 1.0);
   vec3 c;
   float alpha = 1.0;
   // Une seule source, comme dans le dessin. Une lampe d'appoint relevait bien
@@ -122,23 +189,23 @@ void main() {
   // la part de lumière qui ne vient d'aucune direction.
   if (vMat < 0.5) {
     // Mat : plastique, laine, feutre.
-    c = vCol * (0.65 + 0.44 * diff) + vCol * refl * 0.15 + vec3(1.0) * spec * 0.14 + vCol * bord * 0.26;
+    c = base * (0.65 + 0.44 * diff) + base * refl * 0.15 + vec3(1.0) * spec * 0.14 + base * bord * 0.26;
   } else if (vMat < 1.5) {
     // Métal : il n'existe que par ce qu'il reflète.
-    c = vCol * (0.24 + 0.42 * diff) + vCol * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
+    c = base * (0.24 + 0.42 * diff) + base * refl * 1.15 + vec3(1.0, 0.96, 0.86) * spec * 0.8;
   } else if (vMat < 2.5) {
     // Verre : transparent sur la face, opaque de biais — et d'autant plus
     // couvrant qu'il est sombre. Sans cette part-là, les lunettes de soleil
     // laissaient voir les yeux comme une paire de lunettes de vue.
-    float teinte = 1.0 - dot(vCol, vec3(0.3, 0.6, 0.1));
-    c = mix(refl, vCol * 0.7, 0.4) + vec3(1.0) * spec * 1.5 + vCol * bord * 0.5;
+    float teinte = 1.0 - dot(base, vec3(0.3, 0.6, 0.1));
+    c = mix(refl, base * 0.7, 0.4) + vec3(1.0) * spec * 1.5 + base * bord * 0.5;
     alpha = clamp(0.18 + teinte * 0.5 + bord * 0.5 + spec, 0.0, 1.0);
   } else if (vMat < 3.5) {
     // Lumière : l'auréole ne s'éteint jamais.
-    c = vCol * (0.9 + 0.25 * diff) + vCol * bord * 1.5 + vec3(1.0) * spec * 0.5;
+    c = base * (0.9 + 0.25 * diff) + base * bord * 1.5 + vec3(1.0) * spec * 0.5;
   } else {
     // Gemme.
-    c = vCol * (0.3 + 0.7 * diff) + refl * 0.3 + vec3(1.0) * spec * 1.4 + vCol * bord * 0.7;
+    c = base * (0.3 + 0.7 * diff) + refl * 0.3 + vec3(1.0) * spec * 1.4 + base * bord * 0.7;
   }
   // Filet de sécurité : si un pilote a quand même sorti un NaN, on rend la
   // couleur du bloc. Le relief se perd sur ce pixel, la lecture non — alors
@@ -159,11 +226,15 @@ interface Tampons {
   nor: WebGLBuffer;
   col: WebGLBuffer;
   mat: WebGLBuffer;
+  local: WebGLBuffer;
+  grain: WebGLBuffer;
   nb: number;
 }
 
 export interface BlocRelief {
   value: number;
+  /** Signature de la maille, calculée à la naissance du bloc. */
+  cle: string;
   shape: Shape;
   /** Matière de chaque cube, sur un chantier. Absente au mode nombre. */
   skin?: Skin[];
@@ -266,7 +337,8 @@ export class Relief {
     gl.useProgram(prog);
     this.gl = gl;
     this.prog = prog;
-    for (const nom of ['aPos', 'aNor', 'aCol', 'aMat']) this.locs[nom] = gl.getAttribLocation(prog, nom);
+    for (const nom of ['aPos', 'aNor', 'aCol', 'aMat', 'aLocal', 'aGrain'])
+      this.locs[nom] = gl.getAttribLocation(prog, nom);
     for (const nom of ['uProj', 'uModele', 'uNormale', 'uOeil', 'uBiais'])
       this.uni[nom] = gl.getUniformLocation(prog, nom);
     gl.enable(gl.DEPTH_TEST);
@@ -305,7 +377,15 @@ export class Relief {
       gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
       return b;
     };
-    return { pos: buf(maille.pos), nor: buf(maille.nor), col: buf(maille.col), mat: buf(maille.mat), nb: maille.nb };
+    return {
+      pos: buf(maille.pos),
+      nor: buf(maille.nor),
+      col: buf(maille.col),
+      mat: buf(maille.mat),
+      local: buf(maille.local),
+      grain: buf(maille.grain),
+      nb: maille.nb,
+    };
   }
 
   private tampons(cle: string, fabrique: () => Maille): Tampons | null {
@@ -333,22 +413,21 @@ export class Relief {
         gl.deleteBuffer(t.nor);
         gl.deleteBuffer(t.col);
         gl.deleteBuffer(t.mat);
+        gl.deleteBuffer(t.local);
+        gl.deleteBuffer(t.grain);
       }
       this.cache.delete(cle);
     }
   }
 
   /**
-   * La clé dit la forme *et* la matière : deux assemblages de même compte n'ont
-   * pas la même silhouette, et le même mur en chêne ou en brique n'est pas la
-   * même maille. Au mode nombre, la valeur suffit à dire les deux.
+   * La clé du bloc est calculée une fois pour toutes à sa naissance
+   * (`world.add`) : elle dit la forme, les matières *et* les graines, et la
+   * rebâtir à chaque image coûterait deux kilo-octets de chaîne par mur.
    */
   private bloc(b: BlocRelief): Tampons | null {
     const skin = b.skin ?? [];
-    const cle = skin.length
-      ? `bloc:${signature(b.shape.cells)}:${skin.map((s) => s.mat).join(',')}`
-      : `bloc:${b.value}`;
-    return this.tampons(cle, () => {
+    return this.tampons(b.cle, () => {
       const base = teinte(colorFor(b.value));
       const couleurs: Vec3[] = skin.length
         ? skin.map((s) => teinte(matiereFor(s.mat).couleur))
@@ -356,7 +435,11 @@ export class Relief {
       const modeles = skin.length
         ? skin.map((s) => matiereFor(s.mat).modele)
         : b.shape.cells.map(() => MAT_MAT);
-      return mailleBloc(b.shape, couleurs, modeles);
+      const grains = skin.map((s) => matiereFor(s.mat).grain);
+      // La graine est ramenée dans [0, 1[ : sur un téléphone en demi-précision,
+      // un entier de cinq chiffres nourrissant un `sin` ne rend plus du hasard.
+      const graines = skin.map((s) => (s.seed % 65536) / 65536);
+      return mailleBloc(b.shape, couleurs, modeles, grains, graines);
     });
   }
 
@@ -438,6 +521,8 @@ export class Relief {
     lie(t.nor, this.locs.aNor, 3);
     lie(t.col, this.locs.aCol, 3);
     lie(t.mat, this.locs.aMat, 1);
+    lie(t.local, this.locs.aLocal, 3);
+    lie(t.grain, this.locs.aGrain, 2);
     gl.uniformMatrix4fv(this.uni.uModele, false, modele);
     gl.uniformMatrix4fv(this.uni.uNormale, false, normale);
     gl.drawArrays(gl.TRIANGLES, 0, t.nb);
@@ -566,17 +651,46 @@ export class Relief {
  * cubes d'un 10 partagent la teinte de leur valeur, mais un mur de chantier
  * mêle le chêne et la brique, et souder ne repeint rien.
  */
-export function mailleBloc(shape: Shape, couleurs: Vec3[], modeles: number[]): Maille {
+export function mailleBloc(
+  shape: Shape,
+  couleurs: Vec3[],
+  modeles: number[],
+  grains: number[] = [],
+  graines: number[] = [],
+): Maille {
   const f = new Forge();
   const cells = centeredOf(shape);
+  const tranches: Array<{ de: number; a: number; cx: number; cy: number; g: number; s: number }> = [];
   cells.forEach((c, i) => {
+    const de = f.nbSommets;
     f.peint(couleurs[i] ?? couleurs[0], modeles[i] ?? MAT_MAT);
     f.save();
     f.translate(c.x * UNIT, c.y * UNIT, 0);
     f.boite([UNIT / 2, UNIT / 2, Z], ARRONDI, 3);
     f.restore();
+    tranches.push({
+      de,
+      a: f.nbSommets,
+      cx: c.x * UNIT,
+      cy: c.y * UNIT,
+      g: grains[i] ?? 0,
+      s: graines[i] ?? 0,
+    });
   });
-  return f.fini();
+
+  // Chaque cube reçoit son propre repère : le grain s'y accroche, et il ne
+  // bougera plus quand une soudure déplacera le centre de masse du bloc.
+  const maille = f.fini();
+  for (const t of tranches) {
+    for (let v = t.de; v < t.a; v++) {
+      maille.local[v * 3] = maille.pos[v * 3] - t.cx;
+      maille.local[v * 3 + 1] = maille.pos[v * 3 + 1] - t.cy;
+      maille.local[v * 3 + 2] = maille.pos[v * 3 + 2];
+      maille.grain[v * 2] = t.g;
+      maille.grain[v * 2 + 1] = t.s;
+    }
+  }
+  return maille;
 }
 
 // --- petites matrices ------------------------------------------------------
