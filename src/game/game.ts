@@ -30,6 +30,7 @@ import {
   cameraIdentite,
   centreVue,
   clampCamera,
+  naitSousLeDoigt,
   toWorld,
   zoomMin,
   zoomPourcent,
@@ -96,16 +97,18 @@ interface Drag {
    * Le défilement au bord attend que le doigt soit entré franchement dans le
    * cadre.
    *
-   * Un cube tiré de la barre naît *dans* la bande du bas, et souvent dans celle
-   * d'un côté — le premier bouton est à 46 px du bord. Sans cet armement, le
-   * monde se mettrait à filer avant que l'enfant ait bougé d'un millimètre.
+   * Un cube tiré de la barre naît juste au-dessus d'elle, donc *dans* la bande
+   * du bas, et souvent dans celle d'un côté — le premier bouton est à 46 px du
+   * bord. Sans cet armement, le monde se mettrait à filer à la seconde où le
+   * cube apparaît.
    * Attraper un bloc déjà collé au bord obéit désormais à la même règle : il
    * faut s'en éloigner une fois pour que le retour au bord veuille dire
    * quelque chose.
    */
   bordArme: boolean;
   /**
-   * L'état d'avant, pour un cube né sous le doigt dans la barre.
+   * L'état d'avant, pour un cube venu de la barre. Il est pris dès l'appui sur
+   * le bouton (`EnMain.avant`) et voyage avec le cube.
    *
    * Il n'entre dans la pile d'annulation qu'au moment où le cube est gardé :
    * un cube tiré puis rendu à la barre n'a rien changé, et laisser deux
@@ -116,6 +119,25 @@ interface Drag {
 
 interface Slice {
   path: Sample[];
+}
+
+/**
+ * Un cube pris dans la barre, **pas encore sur le chantier**.
+ *
+ * Il n'a ni corps ni image : rien qu'une matière et un doigt qui la porte. Le
+ * cube ne naissait autrefois qu'à l'appui, aussitôt posé dans le monde à la
+ * ligne de pose — sa physique était donc dans la scène alors que le doigt était
+ * encore sur le bouton : il portait une ombre, et le promener sous la barre
+ * bousculait les blocs déjà bâtis. Tant qu'il est en main, il n'existe pour
+ * personne.
+ */
+interface EnMain {
+  mat: number;
+  /** Dernière position du doigt, à l'écran. */
+  ex: number;
+  ey: number;
+  /** L'état d'avant, mis de côté dès l'appui : voir `Drag.avant`. */
+  avant: Snapshot;
 }
 
 /**
@@ -144,6 +166,8 @@ export class Game {
   private visuals = new Map<number, Visual>();
   private drags = new Map<number, Drag>();
   private slices = new Map<number, Slice>();
+  /** Les cubes pris dans la barre et pas encore amenés sur le chantier. */
+  private mains = new Map<number, EnMain>();
   private navs = new Map<number, Nav>();
   /** L'état de la caméra au début du geste à deux doigts. */
   private navDepart: { cam: Camera; centre: Nav; ecart: number } | null = null;
@@ -356,6 +380,9 @@ export class Game {
   private releaseEverything = () => {
     for (const drag of this.drags.values()) this.releaseDrag(drag);
     this.drags.clear();
+    // Un cube encore en main n'a jamais existé : il s'en va sans laisser de
+    // trace, comme s'il n'avait pas quitté la barre.
+    this.mains.clear();
     this.slices.clear();
     this.navs.clear();
     this.navDepart = null;
@@ -385,41 +412,58 @@ export class Game {
   }
 
   /**
-   * Fait naître un cube **sous le doigt**, dans la barre, et le confie au
-   * glisser en cours. C'est le seul geste qui fabrique de la matière.
+   * Prend un cube dans la barre. C'est le seul geste qui fabrique de la matière.
    *
-   * Il ne tombe pas du ciel : un cube lâché du haut atterrit où il veut, et sur
-   * un chantier plus grand que l'écran, souvent hors de vue. Ici, l'enfant le
-   * tire de la barre jusqu'à l'endroit exact où il le pose — et s'il le relâche
-   * sans être sorti de la barre, le cube y retourne, ce qui est déjà la règle
-   * du rangement (rien n'a été créé, rien n'est à annuler).
+   * **Le cube ne naît pas ici** : le doigt est encore sur le bouton, donc dans
+   * la barre, qui couvre la bande de sol. Un cube né là serait dans la scène
+   * avant d'y avoir été amené — c'était le défaut : il portait une ombre sur le
+   * chantier, et le promener sous la barre poussait les blocs déjà bâtis. Il
+   * reste donc en main, hors du monde, jusqu'à ce que le doigt l'amène là où il
+   * peut vraiment se tenir (`naitSousLeDoigt`).
+   *
+   * Relâché avant, il n'a jamais existé : rien n'a été créé, rien n'est à
+   * annuler. C'est déjà la règle du rangement.
    */
   prendreDansLaBarre(mat: number, pointerId: number, clientX: number, clientY: number): boolean {
     // Le premier geste de la partie peut être celui-ci : sans ça, le son de
     // pose serait le seul à ne jamais réveiller la carte audio.
     sfx.unlockAudio();
-    if (this.world.totalUnits + 1 > this.plafond) {
+    if (!this.chantier || this.world.totalUnits + 1 > this.plafond) {
       sfx.playRefuse();
       return false;
     }
     const rect = this.canvas.getBoundingClientRect();
-    const ecran = { x: clientX - rect.left, y: clientY - rect.top };
-    const p = toWorld(this.camera, this.vue, ecran);
+    this.mains.set(pointerId, {
+      mat,
+      ex: clientX - rect.left,
+      ey: clientY - rect.top,
+      // L'état d'avant est pris dès l'appui, pas empilé : voir `Drag.avant`.
+      avant: this.etat(),
+    });
+    return true;
+  }
 
-    // L'état d'avant est mis de côté, pas empilé : voir `Drag.avant`.
-    const avant = this.etat();
-    // Le doigt est encore *dans la barre*, qui recouvre la bande de sol : né
-    // là, le cube naîtrait sous le sol, et le solveur ne l'en sortirait plus.
-    // On le fait donc naître à la place que le glisser lui donnerait — il sort
-    // de la barre du même mouvement, sans saut.
+  /**
+   * Le cube en main devient un cube du chantier, sous le doigt, et le glisser
+   * en cours le reprend sans rien savoir d'où il vient.
+   */
+  private poseEnMain(pointerId: number, main: EnMain, t: number) {
+    // Un autre doigt a pu remplir la scène entre-temps.
+    if (this.world.totalUnits + 1 > this.plafond) {
+      this.mains.delete(pointerId);
+      sfx.playRefuse();
+      return;
+    }
+    const p = toWorld(this.camera, this.vue, { x: main.ex, y: main.ey });
     const ou = this.tenable(p.x, p.y);
     const block = this.world.add(shapeFor(1), ou.x, ou.y, 0, { x: 0, y: 0 }, undefined, [
-      newSkin(mat),
+      newSkin(main.mat),
     ]);
     this.track(block);
 
     const shake = new ShakeDetector();
-    shake.reset({ x: p.x, y: p.y, t: performance.now() });
+    shake.reset({ x: p.x, y: p.y, t });
+    this.mains.delete(pointerId);
     this.drags.set(pointerId, {
       blockId: block.id,
       // Le cube est pris par son centre : il est né là, il n'a pas d'ailleurs.
@@ -427,21 +471,20 @@ export class Game {
       oy: 0,
       px: p.x,
       py: p.y,
-      ex: ecran.x,
-      ey: ecran.y,
+      ex: main.ex,
+      ey: main.ey,
       dirX: 0,
       dirY: -1,
       travelled: 0,
       shake,
       candidate: null,
       bordArme: false,
-      avant,
+      avant: main.avant,
     });
 
-    sfx.playPose(matiereFor(mat));
+    sfx.playPose(matiereFor(main.mat));
     this.dirty = true;
     this.emit();
-    return true;
   }
 
   /**
@@ -846,6 +889,20 @@ export class Game {
     const p = this.toLocal(e);
     this.pointer = p;
 
+    // Un cube encore en main ne fait rien d'autre que suivre : il n'a pas de
+    // corps à déplacer, pas d'ombre à porter, et ne pousse rien. Il ne naît
+    // qu'en arrivant là où il peut se tenir sous le doigt.
+    const main = this.mains.get(e.pointerId);
+    if (main) {
+      const ecran = this.toEcran(e);
+      main.ex = ecran.x;
+      main.ey = ecran.y;
+      if (naitSousLeDoigt(this.camera, this.vue, ecran, this.ligneDePose)) {
+        this.poseEnMain(e.pointerId, main, e.timeStamp);
+      }
+      return;
+    }
+
     const drag = this.drags.get(e.pointerId);
     if (drag) {
       const dx = p.x - drag.px;
@@ -883,6 +940,9 @@ export class Game {
   };
 
   private onPointerUp = (e: PointerEvent) => {
+    // Lâché avant d'avoir quitté la barre : le cube n'a jamais existé.
+    this.mains.delete(e.pointerId);
+
     const drag = this.drags.get(e.pointerId);
     if (drag) {
       this.drags.delete(e.pointerId);
@@ -907,11 +967,20 @@ export class Game {
 
   // --- manipulation -----------------------------------------------------
 
+  /**
+   * Le plus bas qu'un bloc tenu puisse descendre. `tenable` s'y arrête, et c'est
+   * la même ligne qui décide où un cube de la barre peut naître sous le doigt :
+   * les deux doivent bouger ensemble, sinon le cube naît là où il ne tient pas.
+   */
+  private get ligneDePose(): number {
+    return this.world.groundY - UNIT * 0.4;
+  }
+
   /** Où un bloc tenu peut aller : jamais dans un mur, jamais dans le sol. */
   private tenable(x: number, y: number) {
     return {
       x: clamp(x, UNIT * 0.6, this.world.width - UNIT * 0.6),
-      y: clamp(y, -240, this.world.groundY - UNIT * 0.4),
+      y: clamp(y, -240, this.ligneDePose),
     };
   }
 

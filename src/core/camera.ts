@@ -66,6 +66,25 @@ export function toWorld(cam: Camera, vue: Vue, p: Point): Point {
   return { x: (p.x - c.x) / cam.k + cam.x, y: (p.y - c.y) / cam.k + cam.y };
 }
 
+/**
+ * Un cube pris dans la barre peut-il naître **exactement sous le doigt** ici ?
+ *
+ * Deux conditions qui n'en font qu'une : avoir quitté la barre, et être
+ * au-dessus de la ligne de pose. Un bloc tenu ne descend jamais dans le sol ;
+ * né plus bas, le cube apparaîtrait décalé au-dessus du doigt — et c'est
+ * précisément ce qu'on veut éviter. La bande de sol est donc une zone morte :
+ * on y voit le sol, et rien n'y naît.
+ *
+ * Il faut bien les deux. La barre est bornée à l'écran et la ligne de pose dans
+ * le monde : sur un chantier cadré en haut d'une tour, le sol est hors de vue et
+ * seule la barre décide ; caméra posée au sol, c'est la ligne de pose qui est la
+ * plus haute des deux, et c'est elle qui décide.
+ */
+export function naitSousLeDoigt(cam: Camera, vue: Vue, ecran: Point, ligneDePose: number) {
+  if (ecran.y > vue.h - vue.inset) return false;
+  return toWorld(cam, vue, ecran).y <= ligneDePose;
+}
+
 /** Zoom au-dessous duquel le monde entier tiendrait déjà dans la vue. */
 export function zoomMin(vue: Vue, monde = MONDE): number {
   const utile = Math.max(1, vue.h - vue.inset);

@@ -435,27 +435,43 @@ ses indices plutôt qu'avec ses points.
 
 | Geste | Effet |
 | --- | --- |
-| **Tirer** une matière hors de la barre | le cube naît sous le doigt et se pose où on le lâche |
+| **Tirer** une matière hors de la barre | le cube naît sous le doigt en entrant dans la scène, et se pose où on le lâche |
 | Glisser un bloc contre un autre, puis lâcher | il se soude, aimanté sur la grille de sa cible |
 | Tenir un bloc et le **secouer** | détache le cube que le doigt tient |
 | Tracer un **trait franc** | coupe, et chaque morceau connexe devient un bloc |
 
 **Le cube ne tombe pas du ciel : on le tire de la barre.** Il naît sous le doigt
-au moment où celui-ci se pose sur la matière, et il suit la main jusqu'à sa
-place. Un cube lâché du haut atterrit où il veut, et sur un chantier de sept
-écrans, souvent hors de vue — il faudrait partir à sa recherche. Le lâcher sans
+au moment où celui-ci entre dans la scène, et il suit la main jusqu'à sa place.
+Un cube lâché du haut atterrit où il veut, et sur un chantier de sept écrans,
+souvent hors de vue — il faudrait partir à sa recherche. Le lâcher sans
 être sorti de la barre l'y range, ce qui n'est pas une exception mais la règle
 du rangement appliquée telle quelle : la barre *est* la corbeille du chantier.
 Rien n'ayant alors été créé, rien n'est à annuler non plus — un cube tiré puis
 rendu ne laisse pas une entrée muette dans la pile.
 
-Deux conséquences ont dû être réglées. Le doigt est encore *dans la barre*, qui
-recouvre la bande de sol : né là, le cube naîtrait **sous** le sol et le solveur
-ne l'en sortirait plus. Il naît donc à la place que le glisser lui donnerait
-déjà — il sort de la barre du même mouvement, sans saut. Et le défilement au
-bord ne s'arme qu'une fois le doigt entré franchement dans le cadre : le premier
-bouton est à 46 px du bord gauche, dans la bande qui déclenche le défilement, et
-le monde se serait mis à filer avant que l'enfant ait bougé d'un millimètre.
+**Il reste en main tant qu'on ne l'a pas amené sur le chantier.** Le doigt est
+encore *dans la barre*, qui recouvre la bande de sol : un cube né là serait dans
+la scène avant d'y avoir été porté. C'était le premier essai — le cube naissait à
+l'appui, posé d'office à la ligne de pose — et il coûtait deux défauts qu'on
+voyait à l'écran : il portait une **ombre** sur un chantier où il n'était pas
+encore, et le promener sous la barre **bousculait les blocs déjà bâtis**, par un
+corps qu'on ne voyait pas. Il n'a donc plus ni corps ni image jusqu'à ce que le
+doigt l'amène là où il peut vraiment se tenir.
+
+Où, exactement ? Là où il naîtra **au pixel sous le doigt** : hors de la barre,
+et au-dessus de la ligne de pose. Il faut bien les deux, et pour deux raisons
+différentes. La barre est bornée à l'écran ; la ligne de pose est dans le monde,
+et un bloc tenu ne descend jamais plus bas (`tenable`). Cadré en haut d'une tour,
+le sol est hors de vue et seule la barre décide ; caméra posée au sol, c'est la
+ligne de pose qui est la plus haute des deux. **La bande de sol est donc une zone
+morte** : on la traverse sans que rien n'apparaisse. C'est délibéré — un cube qui
+y naîtrait naîtrait décalé *au-dessus* de la main, ce qu'on cherchait justement à
+faire disparaître. Un test tient cette promesse pour chaque hauteur d'écran.
+
+Et le défilement au bord ne s'arme qu'une fois le doigt entré franchement dans le
+cadre : le premier bouton est à 46 px du bord gauche, dans la bande qui déclenche
+le défilement, et le monde se serait mis à filer avant que l'enfant ait bougé
+d'un millimètre.
 Attraper un bloc déjà collé au bord obéit désormais à la même règle — il faut
 s'en éloigner une fois pour que le retour au bord veuille dire quelque chose.
 

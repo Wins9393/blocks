@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { UNIT } from './constants';
 import {
   MONDE,
+  SOL_Y,
   ZOOM_MAX,
   ZOOM_PAS,
   ZOOM_REPOS,
   cameraDepart,
   cameraIdentite,
   clampCamera,
+  naitSousLeDoigt,
   toScreen,
   toWorld,
   zoomMin,
@@ -152,5 +155,61 @@ describe('le niveau de zoom affiché', () => {
     expect(zoomPourcent(zoomMin(vue), vue)).toBe(0);
     expect(zoomPourcent(ZOOM_MAX, vue)).toBe(100);
     for (let p = 0; p <= 100; p += 5) expect(zoomPourcent(zoomPourK(p, vue), vue)).toBe(p);
+  });
+});
+
+describe('le cube pris dans la barre', () => {
+  // La ligne au-dessous de laquelle un bloc tenu ne descend pas : c'est celle de
+  // `Game.tenable`, et les deux doivent bouger ensemble.
+  const pose = SOL_Y - UNIT * 0.4;
+
+  it('ne naît pas tant que le doigt n’est pas sorti de la barre', () => {
+    // Sinon il est dans la scène avant d'y avoir été amené : il y porte une
+    // ombre, et le promener sous la barre pousse les blocs déjà bâtis.
+    for (const vue of vues) {
+      const cam = cameraDepart(vue);
+      for (const y of [vue.h, vue.h - 1, vue.h - vue.inset + 1]) {
+        expect(naitSousLeDoigt(cam, vue, { x: vue.w / 2, y }, pose), `y=${y}`).toBe(false);
+      }
+    }
+  });
+
+  it('ne naît pas dans la bande de sol, où il ne tiendrait pas', () => {
+    // Là, le doigt a quitté la barre mais le cube ne peut pas le suivre : il
+    // apparaîtrait décalé au-dessus de la main. On préfère qu'il n'apparaisse pas.
+    for (const vue of vues) {
+      const cam = cameraDepart(vue);
+      const solEcran = toScreen(cam, vue, { x: 0, y: pose }).y;
+      expect(solEcran).toBeLessThan(vue.h - vue.inset);
+      expect(naitSousLeDoigt(cam, vue, { x: vue.w / 2, y: solEcran + 1 }, pose)).toBe(false);
+      expect(naitSousLeDoigt(cam, vue, { x: vue.w / 2, y: solEcran - 1 }, pose)).toBe(true);
+    }
+  });
+
+  it('naît exactement sous le doigt, jamais décalé', () => {
+    // La seule promesse qui compte : partout où le cube naît, la place que le
+    // glisser lui donne est celle du doigt, au pixel.
+    for (const vue of vues) {
+      for (const cam of [cameraDepart(vue), { x: MONDE.w / 2, y: 300, k: 1 }]) {
+        for (let y = 0; y < vue.h; y += 7) {
+          const ecran = { x: vue.w / 2, y };
+          if (!naitSousLeDoigt(cam, vue, ecran, pose)) continue;
+          // Le chemin exact du jeu : écran → monde → `tenable` → écran.
+          const monde = toWorld(cam, vue, ecran);
+          const ou = { x: monde.x, y: Math.min(monde.y, pose) };
+          expect(toScreen(cam, vue, ou).y, `y=${y}`).toBeCloseTo(y, 6);
+        }
+      }
+    }
+  });
+
+  it('naît dès la sortie de la barre quand le sol est hors de vue', () => {
+    // Cadré en haut d'une tour, il n'y a plus de bande de sol à traverser : la
+    // barre décide seule, sinon le cube ne naîtrait jamais.
+    const vue = vues[0];
+    const cam = clampCamera({ x: MONDE.w / 2, y: 200, k: 1 }, vue, MONDE);
+    expect(toScreen(cam, vue, { x: 0, y: pose }).y).toBeGreaterThan(vue.h);
+    expect(naitSousLeDoigt(cam, vue, { x: vue.w / 2, y: vue.h - vue.inset - 1 }, pose)).toBe(true);
+    expect(naitSousLeDoigt(cam, vue, { x: vue.w / 2, y: vue.h - vue.inset + 1 }, pose)).toBe(false);
   });
 });
